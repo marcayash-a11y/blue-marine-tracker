@@ -610,6 +610,11 @@ body {
   margin-top: 8px;
   cursor: pointer;
 }
+.update-location {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
 .update-feed { max-height: 400px; overflow-y: auto; }
 
 /* Admin action bar (mobile floating) */
@@ -2050,6 +2055,7 @@ async function submitPosition() {
 // --- Crew Updates ---
 let updatesData = [];
 let selectedPhoto = null;
+let crewUpdateMarkers = [];
 
 function openUpdateModal() {
   document.getElementById('updateModal').classList.remove('hidden');
@@ -2146,6 +2152,26 @@ function relativeTime(ts) {
   return days + 'd ago';
 }
 
+function nearestCoastName(lat, lon) {
+  const coasts = [
+    { name: 'Ismailia', lat: 30.60, lon: 32.27 },
+    { name: 'Port Said', lat: 31.27, lon: 32.30 },
+    { name: 'Crete', lat: 35.34, lon: 25.14 },
+    { name: 'Malta', lat: 35.90, lon: 14.51 },
+    { name: 'Sicily', lat: 37.08, lon: 15.29 },
+    { name: 'Sardinia', lat: 39.22, lon: 9.12 },
+    { name: 'Formentera', lat: 38.71, lon: 1.44 },
+    { name: 'Almería', lat: 36.84, lon: -2.46 },
+    { name: 'Benalmádena', lat: 36.60, lon: -4.52 }
+  ];
+  let minDist = Infinity, closest = null;
+  for (const c of coasts) {
+    const d = haversineNm(lat, lon, c.lat, c.lon);
+    if (d < minDist) { minDist = d; closest = c.name; }
+  }
+  return minDist < 100 ? closest : null;
+}
+
 function renderUpdates() {
   const el = document.getElementById('updateFeed');
   if (updatesData.length === 0) {
@@ -2155,15 +2181,50 @@ function renderUpdates() {
   el.innerHTML = updatesData.map(u => {
     const photoHtml = u.photo_url ? `<img class="update-photo" src="${u.photo_url}" alt="Photo" loading="lazy" onclick="openLightbox('${u.photo_url}')">` : '';
     const msgHtml = u.message ? `<div class="update-message">${u.message.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>` : '';
+    let locHtml = '';
+    if (u.estimated_lat != null && u.estimated_lon != null) {
+      const coast = nearestCoastName(u.estimated_lat, u.estimated_lon);
+      locHtml = `<div class="update-location">\u{1F4CD} ${coast ? 'Near ' + coast : 'Estimated position'}</div>`;
+    }
     return `<div class="update-card">
       <div class="update-header">
         <span class="update-crew">${u.crew_name.replace(/</g,'&lt;')}</span>
         <span class="update-time">${relativeTime(u.timestamp)}</span>
       </div>
       ${msgHtml}
+      ${locHtml}
       ${photoHtml}
     </div>`;
   }).join('');
+
+  // Update map markers for crew updates with locations
+  renderCrewUpdateMarkers();
+}
+
+function renderCrewUpdateMarkers() {
+  // Remove old markers
+  crewUpdateMarkers.forEach(m => map.removeLayer(m));
+  crewUpdateMarkers = [];
+
+  for (const u of updatesData) {
+    if (u.estimated_lat == null || u.estimated_lon == null) continue;
+    const icon = L.divIcon({
+      html: '<div style="font-size:18px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));">\u{1F4F8}</div>',
+      className: '',
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
+    });
+    const escapedName = u.crew_name.replace(/</g, '&lt;');
+    const escapedMsg = u.message ? u.message.replace(/</g, '&lt;').replace(/\n/g, '<br>') : '';
+    let popupContent = `<b>${escapedName}</b> <small>${relativeTime(u.timestamp)}</small>`;
+    if (escapedMsg) popupContent += `<br>${escapedMsg}`;
+    if (u.photo_url) popupContent += `<br><img src="${u.photo_url}" style="max-width:200px; border-radius:6px; margin-top:4px;" onclick="openLightbox('${u.photo_url}')">`;
+
+    const marker = L.marker([u.estimated_lat, u.estimated_lon], { icon, zIndexOffset: 500 })
+      .bindPopup(popupContent, { maxWidth: 250 })
+      .addTo(map);
+    crewUpdateMarkers.push(marker);
+  }
 }
 
 function openLightbox(url) {

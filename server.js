@@ -81,9 +81,15 @@ db.exec(`
     crew_name TEXT NOT NULL DEFAULT 'Crew',
     message TEXT,
     photo_url TEXT,
-    timestamp TEXT NOT NULL
+    timestamp TEXT NOT NULL,
+    estimated_lat REAL,
+    estimated_lon REAL
   )
 `);
+
+// Add columns if they don't exist (migration for existing databases)
+try { db.exec('ALTER TABLE updates ADD COLUMN estimated_lat REAL'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE updates ADD COLUMN estimated_lon REAL'); } catch (e) { /* already exists */ }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS forecast_cache (
@@ -96,8 +102,12 @@ db.exec(`
   )
 `);
 
-const insertUpdate = db.prepare('INSERT INTO updates (crew_name, message, photo_url, timestamp) VALUES (?, ?, ?, ?)');
+const insertUpdate = db.prepare('INSERT INTO updates (crew_name, message, photo_url, timestamp, estimated_lat, estimated_lon) VALUES (?, ?, ?, ?, ?, ?)');
 const getUpdates = db.prepare('SELECT * FROM updates ORDER BY id DESC LIMIT 50');
+const updateEstimatedLocation = db.prepare('UPDATE updates SET estimated_lat = ?, estimated_lon = ? WHERE id = ?');
+const getUpdatesNearTime = db.prepare('SELECT id, timestamp FROM updates WHERE estimated_lat IS NOT NULL AND abs(julianday(timestamp) - julianday(?)) < (2.0/24.0)');
+const getPositionBefore = db.prepare('SELECT * FROM positions WHERE timestamp <= ? ORDER BY timestamp DESC LIMIT 1');
+const getPositionAfter = db.prepare('SELECT * FROM positions WHERE timestamp > ? ORDER BY timestamp ASC LIMIT 1');
 
 const insertPosition = db.prepare(`
   INSERT INTO positions (lat, lon, speed, course, heading, timestamp,
@@ -242,6 +252,48 @@ async function updateForecastCache(lat, lon) {
   }
 }
 
+// --- Estimate Location for Crew Updates ---
+function estimateLocation(targetTimestamp) {
+  const before = getPositionBefore.get(targetTimestamp);
+  const after = getPositionAfter.get(targetTimestamp);
+
+  if (before && after) {
+    // Interpolate between two positions
+    const tBefore = new Date(before.timestamp).getTime();
+    const tAfter = new Date(after.timestamp).getTime();
+    const tTarget = new Date(targetTimestamp).getTime();
+    const ratio = (tTarget - tBefore) / (tAfter - tBefore);
+    return {
+      lat: before.lat + (after.lat - before.lat) * ratio,
+      lon: before.lon + (after.lon - before.lon) * ratio
+    };
+  }
+
+  if (before) {
+    // Dead reckoning from last known position
+    const hoursDiff = (new Date(targetTimestamp).getTime() - new Date(before.timestamp).getTime()) / 3600000;
+    const speed = before.speed || 0;
+    const courseRad = (before.course || 0) * Math.PI / 180;
+    const latRad = before.lat * Math.PI / 180;
+    const newLat = before.lat + (speed * hoursDiff * Math.cos(courseRad)) / 60;
+    const newLon = before.lon + (speed * hoursDiff * Math.sin(courseRad)) / (60 * Math.cos(latRad));
+    return { lat: newLat, lon: newLon };
+  }
+
+  return { lat: null, lon: null };
+}
+
+// --- Retroactively update crew update locations near a new position ---
+function retroactivelyUpdateLocations(newTimestamp) {
+  const nearbyUpdates = getUpdatesNearTime.all(newTimestamp);
+  for (const update of nearbyUpdates) {
+    const loc = estimateLocation(update.timestamp);
+    if (loc.lat != null) {
+      updateEstimatedLocation.run(loc.lat, loc.lon, update.id);
+    }
+  }
+}
+
 // --- Save Position ---
 async function savePosition(lat, lon, speed, course, heading, timestamp) {
   const weather = await fetchWeather(lat, lon);
@@ -251,6 +303,8 @@ async function savePosition(lat, lon, speed, course, heading, timestamp) {
     weather.wave_height, weather.wave_period, weather.swell_height, weather.sea_temp
   );
   console.log(`Position saved: ${lat.toFixed(4)}, ${lon.toFixed(4)} @ ${speed} kn | ${timestamp}`);
+  // Retroactively improve crew update locations near this position
+  try { retroactivelyUpdateLocations(timestamp); } catch (err) { console.error('Retroactive location update error:', err.message); }
   // Update forecast cache in background (non-blocking)
   updateForecastCache(lat, lon).catch(err => console.error('Forecast bg error:', err.message));
 }
@@ -412,8 +466,9 @@ app.post('/api/updates', async (req, res) => {
 
   const timestamp = new Date().toISOString();
   const name = (crew_name || 'Crew').trim().slice(0, 30);
-  insertUpdate.run(name, message || null, photoUrl, timestamp);
-  console.log(`Update posted by ${name}: ${message || '(photo)'}`);
+  const loc = estimateLocation(timestamp);
+  insertUpdate.run(name, message || null, photoUrl, timestamp, loc.lat, loc.lon);
+  console.log(`Update posted by ${name}: ${message || '(photo)'} | est. location: ${loc.lat != null ? loc.lat.toFixed(4) + ',' + loc.lon.toFixed(4) : 'none'}`);
   res.json({ success: true });
 });
 
