@@ -1377,6 +1377,8 @@ body {
     <input type="number" id="adminCourse" step="any" placeholder="e.g. 270" value="0">
     <label>Heading (&deg;)</label>
     <input type="number" id="adminHeading" step="any" placeholder="e.g. 270" value="0">
+    <label>Date &amp; Time (leave blank for now)</label>
+    <input type="datetime-local" id="adminTimestamp">
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closePositionModal()">Cancel</button>
       <button class="btn btn-primary" onclick="submitPosition()">Save Position</button>
@@ -2002,6 +2004,10 @@ function lockAdmin() {
 function openPositionModal() {
   document.getElementById('positionModal').classList.remove('hidden');
   document.getElementById('positionMsg').textContent = '';
+  // Default to current local time
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('adminTimestamp').value = now.toISOString().slice(0, 16);
 }
 function closePositionModal() {
   document.getElementById('positionModal').classList.add('hidden');
@@ -2024,7 +2030,7 @@ async function submitPosition() {
     const res = await fetch('/api/position', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': savedPin },
-      body: JSON.stringify({ lat, lon, speed, course, heading })
+      body: JSON.stringify({ lat, lon, speed, course, heading, timestamp: document.getElementById('adminTimestamp').value ? new Date(document.getElementById('adminTimestamp').value).toISOString() : undefined })
     });
     const data = await res.json();
     if (res.ok) {

@@ -13,8 +13,12 @@ const app = express();
 app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Data directory: use DATA_DIR env for persistent volumes (e.g. Railway), otherwise local ./data
+const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
 // Serve uploaded images
-const uploadsDir = path.join(__dirname, 'data', 'uploads');
+const uploadsDir = path.join(dataDir, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 app.use('/uploads', express.static(uploadsDir));
 
@@ -48,8 +52,6 @@ const ROUTE_WAYPOINTS = [
 const TOTAL_DISTANCE_NM = 1925;
 
 // --- SQLite Setup ---
-const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 
 const db = new Database(path.join(dataDir, 'tracker.db'));
 db.pragma('journal_mode = WAL');
