@@ -21,6 +21,7 @@ app.use('/uploads', express.static(uploadsDir));
 const PORT = process.env.PORT || 3000;
 const AISSTREAM_API_KEY = process.env.AISSTREAM_API_KEY || '';
 const ADMIN_PIN = process.env.ADMIN_PIN || '2024';
+const DAILY_AVG_NM = parseFloat(process.env.DAILY_AVG_NM) || 100;
 const MMSI = '261006055';
 
 // Route waypoints
@@ -325,6 +326,7 @@ app.get('/api/config', (req, res) => {
     departure: { name: 'Ismailia, Egypt', lat: 30.60, lon: 32.27 },
     destination: { name: 'Benalmádena, Spain', lat: 36.60, lon: -4.52 },
     totalDistanceNm: TOTAL_DISTANCE_NM,
+    dailyAvgNm: DAILY_AVG_NM,
     waypoints: ROUTE_WAYPOINTS
   });
 });

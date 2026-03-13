@@ -186,22 +186,28 @@ body {
 .main-layout {
   display: grid;
   grid-template-columns: 1fr 360px;
+  grid-template-rows: 1fr;
   height: calc(100vh - 62px);
+  position: relative;
 }
 
 /* Map */
-.map-container { position: relative; }
+.map-container { position: relative; grid-column: 1; grid-row: 1; }
 #map { width: 100%; height: 100%; background: var(--bg); }
 
-/* Metric Cards Overlay */
+/* Metric Cards — overlaid on map on desktop */
 .metrics-bar {
   position: absolute;
-  top: 12px; left: 12px; right: 12px;
+  top: 12px; left: 12px; right: 372px;
   z-index: 1000;
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  pointer-events: none;
+  grid-column: 1;
+  grid-row: 1;
 }
+.metrics-bar .metric-card { pointer-events: auto; }
 .metric-card {
   background: rgba(17,24,39,0.92);
   backdrop-filter: blur(12px);
@@ -299,6 +305,8 @@ body {
 
 /* Sidebar */
 .sidebar {
+  grid-column: 2;
+  grid-row: 1;
   background: var(--bg-card);
   border-left: 1px solid var(--border);
   overflow-y: auto;
@@ -848,6 +856,31 @@ body {
 [data-theme="light"] .forecast-block.moderate { background: rgba(245,158,11,0.06); }
 [data-theme="light"] .forecast-block.rough { background: rgba(239,68,68,0.06); }
 
+/* Fit Route Button */
+.btn-fit-route {
+  position: absolute;
+  bottom: 64px;
+  left: 12px;
+  z-index: 1000;
+  background: rgba(17,24,39,0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.btn-fit-route:hover { background: var(--bg-card-hover); border-color: var(--cyan); color: var(--cyan); }
+[data-theme="light"] .btn-fit-route { background: rgba(255,255,255,0.92); }
+
 /* Leaflet overrides */
 .leaflet-control-attribution { display: none !important; }
 
@@ -855,17 +888,47 @@ body {
 @media (max-width: 900px) {
   .main-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: 55vh auto;
     height: auto;
   }
-  .map-container { min-height: 55vh; }
-  .metrics-bar { gap: 5px; }
-  .metric-card { min-width: calc(33% - 4px); flex: 0 0 auto; }
+  .metrics-bar { right: 12px; }
   .sidebar { border-left: none; border-top: 1px solid var(--border); overflow-y: visible; }
   .vessel-badge { display: none; }
   .progress-container { bottom: 10px; left: 10px; right: 10px; padding: 10px 14px; }
   /* Hide header admin action buttons on tablet/mobile — use FAB instead */
   .btn-admin-action:not(.hidden) { display: none; }
+}
+/* Mobile: metrics below map, map takes priority */
+@media (max-width: 768px) {
+  .main-layout {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+  }
+  .map-container {
+    position: relative;
+    height: 55vh;
+    min-height: 55vh;
+    order: 1;
+  }
+  .metrics-bar {
+    position: static;
+    order: 2;
+    padding: 10px;
+    gap: 6px;
+    background: var(--bg);
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    z-index: auto;
+    pointer-events: auto;
+  }
+  .metrics-bar .metric-card {
+    background: var(--bg-card);
+    backdrop-filter: none;
+    min-width: 0;
+    flex: none;
+  }
+  .sidebar { order: 3; }
+  .btn-fit-route { bottom: 56px; left: 10px; }
 }
 
 /* Responsive — Phone */
@@ -906,17 +969,9 @@ body {
   /* Hide lock text admin buttons on mobile, keep icon-only lock */
   .btn-admin-action:not(.hidden) { display: none; }
 
-  /* Metric cards: 2-column grid for readability */
-  .metrics-bar {
-    top: 8px; left: 8px; right: 8px;
-    gap: 5px;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-  .metric-card {
-    min-width: 0;
-    padding: 8px 10px;
-  }
+  /* Metric cards: 2-column grid on small phones */
+  .metrics-bar { grid-template-columns: 1fr 1fr; padding: 8px; gap: 5px; }
+  .metric-card { padding: 8px 10px; }
   .metric-label { font-size: 0.62rem; }
   .metric-value { font-size: 0.95rem; }
   .metric-sub { font-size: 0.6rem; }
@@ -1120,34 +1175,8 @@ body {
 <div class="main-layout">
   <!-- Map Area -->
   <div class="map-container">
-    <div class="metrics-bar">
-      <div class="metric-card">
-        <div class="metric-label">Speed</div>
-        <div class="metric-value" id="metricSpeed">--<span class="metric-unit">kn</span></div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Distance Left</div>
-        <div class="metric-value" id="metricDist">--<span class="metric-unit">nm</span></div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">ETA</div>
-        <div class="metric-value" id="metricEta">--</div>
-        <div class="metric-sub" id="metricEtaCountdown"></div>
-      </div>
-      <div class="metric-card" id="metricWindCard">
-        <div class="metric-label">Wind</div>
-        <div class="metric-value" id="metricWind">--<span class="metric-unit">km/h</span></div>
-      </div>
-      <div class="metric-card" id="metricWaveCard">
-        <div class="metric-label">Wave Height</div>
-        <div class="metric-value" id="metricWave">--<span class="metric-unit">m</span></div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Course</div>
-        <div class="metric-value" id="metricCourse">--<span class="metric-unit">&deg;</span></div>
-      </div>
-    </div>
     <div id="map"></div>
+    <button class="btn-fit-route" onclick="fitRoute()" title="Show full route">&#127758; Fit Route</button>
     <div class="progress-container">
       <div class="progress-header">
         <span class="progress-from">&#127937; Ismailia</span>
@@ -1162,6 +1191,35 @@ body {
       <div class="waiting-icon">&#9973;</div>
       <div class="waiting-text">Waiting for first position from<br><strong>BLUE MARINE</strong>...</div>
       <div class="waiting-sub">The vessel's AIS transponder will report when in range of coastal stations or satellites.</div>
+    </div>
+  </div>
+
+  <!-- Metric Cards -->
+  <div class="metrics-bar">
+    <div class="metric-card">
+      <div class="metric-label">Speed</div>
+      <div class="metric-value" id="metricSpeed">--<span class="metric-unit">kn</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Distance Left</div>
+      <div class="metric-value" id="metricDist">--<span class="metric-unit">nm</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">ETA</div>
+      <div class="metric-value" id="metricEta">--</div>
+      <div class="metric-sub" id="metricEtaCountdown"></div>
+    </div>
+    <div class="metric-card" id="metricWindCard">
+      <div class="metric-label">Wind</div>
+      <div class="metric-value" id="metricWind">--<span class="metric-unit">km/h</span></div>
+    </div>
+    <div class="metric-card" id="metricWaveCard">
+      <div class="metric-label">Wave Height</div>
+      <div class="metric-value" id="metricWave">--<span class="metric-unit">m</span></div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-label">Course</div>
+      <div class="metric-value" id="metricCourse">--<span class="metric-unit">&deg;</span></div>
     </div>
   </div>
 
@@ -1249,13 +1307,21 @@ body {
         <span class="stat-label">Time at Sea</span>
         <span class="stat-value" id="voyageTimeAtSea">--</span>
       </div>
-      <div class="stat-row">
-        <span class="stat-label">Est. Total Duration</span>
-        <span class="stat-value" id="voyageTotalDuration">--</span>
+      <div class="stat-row" id="rowDaysAtSea" style="display:none;">
+        <span class="stat-label">Days at Sea</span>
+        <span class="stat-value" id="voyageDaysAtSea">--</span>
+      </div>
+      <div class="stat-row" id="rowAvgDaily" style="display:none;">
+        <span class="stat-label">Avg Daily Distance</span>
+        <span class="stat-value" id="voyageAvgDaily">--</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">Est. Arrival</span>
-        <span class="stat-value" id="voyageArrival">--</span>
+        <span class="stat-label">Realistic ETA</span>
+        <span class="stat-value" id="voyageRealisticEta">--</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label" style="font-size:0.72rem; color:var(--text-muted)">At current speed (nonstop)</span>
+        <span class="stat-value" style="font-size:0.78rem; color:var(--text-muted)" id="voyageOptimisticEta">--</span>
       </div>
       <div class="stat-row">
         <span class="stat-label">Phase Remaining</span>
@@ -1479,12 +1545,25 @@ function formatCountdown(hours) {
 }
 
 // --- Map Init ---
+let initialZoomDone = false;
+function isMobile() { return window.innerWidth <= 768; }
+
 function initMap() {
   map = L.map('map', { zoomControl: false }).setView([35.5, 15.0], 5);
   L.control.zoom({ position: 'bottomright' }).addTo(map);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     maxZoom: 19
   }).addTo(map);
+}
+
+function fitRoute() {
+  if (routeLine) {
+    map.fitBounds(routeLine.getBounds(), { padding: [30, 30] });
+  }
+}
+
+function zoomToBoat(lat, lon) {
+  map.setView([lat, lon], isMobile() ? 7 : 6);
 }
 
 function drawRoute(waypoints) {
@@ -1534,6 +1613,11 @@ function updateBoatMarker(lat, lon, course) {
   boatMarker.bindPopup(
     `<b>BLUE MARINE</b><br>${lat.toFixed(4)}°, ${lon.toFixed(4)}°<br>Course: ${(course || 0).toFixed(0)}°`
   );
+  // On first position data, zoom to boat
+  if (!initialZoomDone) {
+    initialZoomDone = true;
+    zoomToBoat(lat, lon);
+  }
 }
 
 function updateTrack(history) {
@@ -1660,11 +1744,34 @@ function updateUI() {
     const speeds = historyData.filter(p => p.speed != null && p.speed > 0).map(p => p.speed);
     if (speeds.length > 0) avgSpeed = speeds.reduce((a, b) => a + b, 0) / speeds.length;
   }
+
+  // Realistic ETA based on daily average (~100nm/day default)
+  const dailyAvg = config.dailyAvgNm || 100;
+  const realisticDaysLeft = left / dailyAvg;
+  // Use actual daily avg if we have 2+ days of data
+  let actualDailyAvg = null;
+  let daysAtSea = 0;
+  if (historyData.length > 0) {
+    const firstTime = new Date(historyData[0].timestamp).getTime();
+    daysAtSea = (Date.now() - firstTime) / 86400000;
+    if (daysAtSea >= 2) {
+      actualDailyAvg = sailed / daysAtSea;
+    }
+  }
+  const effectiveDailyAvg = actualDailyAvg || dailyAvg;
+  const realisticDays = left / effectiveDailyAvg;
+
+  // Date range: optimistic = 80% of days, pessimistic = 130% of days
+  const etaEarly = new Date(Date.now() + realisticDays * 0.8 * 86400000);
+  const etaLate = new Date(Date.now() + realisticDays * 1.3 * 86400000);
+  const earlyStr = toCET(etaEarly, { day: 'numeric', month: 'short' });
+  const lateStr = toCET(etaLate, { day: 'numeric', month: 'short' });
+  document.getElementById('metricEta').innerHTML = earlyStr + ' – ' + lateStr;
+  document.getElementById('metricEtaCountdown').textContent = '~' + Math.round(realisticDays) + ' days';
+
+  // Optimistic nonstop ETA (for sidebar)
   const etaSpeed = (d.speed && d.speed > 0.5) ? d.speed : avgSpeed;
-  const hoursLeft = left / etaSpeed;
-  const etaDate = new Date(Date.now() + hoursLeft * 3600000);
-  document.getElementById('metricEta').innerHTML = toCET(etaDate, { day: 'numeric', month: 'short' }) + '<span class="tz-label">CET</span>';
-  document.getElementById('metricEtaCountdown').textContent = formatCountdown(hoursLeft);
+  const hoursLeftNonstop = left / etaSpeed;
 
   // Wind metric with warning
   const windCard = document.getElementById('metricWindCard');
@@ -1737,14 +1844,6 @@ function updateUI() {
   document.getElementById('voyagePhaseRemaining').textContent = phaseInfo.phaseRemaining + ' nm';
   document.getElementById('voyageTotalRemaining').textContent = phaseInfo.totalRemaining + ' nm';
 
-  // Est. total voyage duration
-  const totalHours = config.totalDistanceNm / avgSpeed;
-  document.getElementById('voyageTotalDuration').textContent = formatDuration(totalHours);
-
-  // Est. arrival
-  const arrivalDate = new Date(Date.now() + hoursLeft * 3600000);
-  document.getElementById('voyageArrival').innerHTML = toCET(arrivalDate, { day: 'numeric', month: 'short', year: 'numeric' }) + ' <span class="tz-label">CET</span>';
-
   // Time at sea
   if (historyData.length > 0) {
     const firstTime = new Date(historyData[0].timestamp).getTime();
@@ -1753,6 +1852,23 @@ function updateUI() {
   } else {
     document.getElementById('voyageTimeAtSea').textContent = '--';
   }
+
+  // Days at sea & avg daily distance (show after 2+ days)
+  if (daysAtSea >= 2) {
+    document.getElementById('rowDaysAtSea').style.display = '';
+    document.getElementById('voyageDaysAtSea').textContent = Math.floor(daysAtSea) + ' days';
+    document.getElementById('rowAvgDaily').style.display = '';
+    document.getElementById('voyageAvgDaily').textContent = Math.round(actualDailyAvg) + ' nm/day';
+  }
+
+  // Realistic ETA (date range)
+  const realisticEarlyStr = toCET(etaEarly, { day: 'numeric', month: 'short' });
+  const realisticLateStr = toCET(etaLate, { day: 'numeric', month: 'short' });
+  document.getElementById('voyageRealisticEta').innerHTML = realisticEarlyStr + ' – ' + realisticLateStr + ' <span class="tz-label">CET</span>';
+
+  // Optimistic nonstop ETA
+  const nonstopDate = new Date(Date.now() + hoursLeftNonstop * 3600000);
+  document.getElementById('voyageOptimisticEta').innerHTML = toCET(nonstopDate, { day: 'numeric', month: 'short' }) + ' <span class="tz-label">CET</span>';
 
   // Position Log
   const logEl = document.getElementById('posLog');
