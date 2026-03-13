@@ -365,6 +365,17 @@ function connectAIS() {
 }
 
 // --- API Routes ---
+// Temporary debug endpoint
+app.get('/api/debug', (req, res) => {
+  res.json({
+    DATA_DIR: process.env.DATA_DIR,
+    dataDir: dataDir,
+    dbExists: fs.existsSync(path.join(dataDir, 'tracker.db')),
+    uploadsExists: fs.existsSync(path.join(dataDir, 'uploads')),
+    dataDirContents: fs.existsSync(dataDir) ? fs.readdirSync(dataDir) : 'DIR NOT FOUND'
+  });
+});
+
 app.get('/api/latest', (req, res) => {
   const row = getLatest.get();
   res.json(row || null);
