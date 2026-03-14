@@ -889,6 +889,72 @@ body {
   transition: opacity 0.15s;
 }
 .update-delete-btn:hover { opacity: 1; }
+.coord-mode-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.coord-mode-btn {
+  flex: 1;
+  padding: 7px 0;
+  border: none;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.coord-mode-btn.active {
+  background: var(--cyan-dim);
+  color: white;
+}
+.dm-fields {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.dm-fields input {
+  width: auto !important;
+  flex: 1;
+}
+.dm-fields .dm-symbol {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.dm-fields .dm-dir-btn {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--cyan);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  min-width: 32px;
+  text-align: center;
+}
+.dm-fields .dm-dir-btn:hover { border-color: var(--cyan); }
+.coord-preview {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  min-height: 1em;
+}
+.smart-parse-input {
+  margin-top: 8px;
+}
+.smart-parse-input input {
+  font-family: var(--mono) !important;
+  font-size: 0.82rem !important;
+}
 .update-feed { max-height: 400px; overflow-y: auto; }
 
 /* Admin action bar (mobile floating) */
@@ -1646,10 +1712,54 @@ body {
 <div class="modal-backdrop hidden" id="positionModal">
   <div class="modal">
     <h3>&#128205; Add Position</h3>
-    <label>Latitude</label>
-    <input type="number" id="adminLat" step="any" placeholder="e.g. 35.34">
-    <label>Longitude</label>
-    <input type="number" id="adminLon" step="any" placeholder="e.g. 25.14">
+    <div class="coord-mode-toggle">
+      <button class="coord-mode-btn active" id="modeDecimal" onclick="setCoordMode('decimal')">Decimal</button>
+      <button class="coord-mode-btn" id="modeDM" onclick="setCoordMode('dm')">Degrees Minutes</button>
+      <button class="coord-mode-btn" id="modePaste" onclick="setCoordMode('paste')">Paste</button>
+    </div>
+
+    <!-- Decimal mode -->
+    <div id="coordDecimal">
+      <label>Latitude</label>
+      <input type="number" id="adminLat" step="any" placeholder="e.g. 35.34" oninput="updateCoordPreview()">
+      <label>Longitude</label>
+      <input type="number" id="adminLon" step="any" placeholder="e.g. 25.14" oninput="updateCoordPreview()">
+    </div>
+
+    <!-- Degrees Minutes mode -->
+    <div id="coordDM" style="display:none;">
+      <label>Latitude</label>
+      <div class="dm-fields">
+        <input type="number" id="dmLatDeg" step="1" placeholder="32" oninput="dmToDecimal()">
+        <span class="dm-symbol">&deg;</span>
+        <input type="number" id="dmLatMin" step="any" placeholder="28.237" oninput="dmToDecimal()">
+        <span class="dm-symbol">'</span>
+        <button class="dm-dir-btn" id="dmLatDir" onclick="toggleDir('lat')">N</button>
+      </div>
+      <label>Longitude</label>
+      <div class="dm-fields">
+        <input type="number" id="dmLonDeg" step="1" placeholder="25" oninput="dmToDecimal()">
+        <span class="dm-symbol">&deg;</span>
+        <input type="number" id="dmLonMin" step="any" placeholder="08.400" oninput="dmToDecimal()">
+        <span class="dm-symbol">'</span>
+        <button class="dm-dir-btn" id="dmLonDir" onclick="toggleDir('lon')">E</button>
+      </div>
+    </div>
+
+    <!-- Paste / Smart parse mode -->
+    <div id="coordPaste" style="display:none;">
+      <label>Paste coordinates (any format)</label>
+      <div class="smart-parse-input">
+        <input type="text" id="pasteCoordInput" placeholder='e.g. 32&deg; 28.237&apos; N, 25&deg; 08.4&apos; E' oninput="parseCoordInput()">
+      </div>
+    </div>
+
+    <div class="coord-preview" id="coordPreview"></div>
+
+    <!-- Hidden decimal fields used by submit -->
+    <input type="hidden" id="finalLat">
+    <input type="hidden" id="finalLon">
+
     <label>Speed (kn)</label>
     <input type="number" id="adminSpeed" step="any" placeholder="e.g. 6.5" value="0">
     <label>Course (&deg;)</label>
@@ -2298,10 +2408,12 @@ function lockAdmin() {
 }
 
 // --- Position Modal ---
+let coordMode = 'decimal';
+
 function openPositionModal() {
   document.getElementById('positionModal').classList.remove('hidden');
   document.getElementById('positionMsg').textContent = '';
-  // Default to current local time
+  document.getElementById('coordPreview').textContent = '';
   const now = new Date();
   now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
   document.getElementById('adminTimestamp').value = now.toISOString().slice(0, 16);
@@ -2313,9 +2425,133 @@ document.getElementById('positionModal').addEventListener('click', (e) => {
   if (e.target === document.getElementById('positionModal')) closePositionModal();
 });
 
-async function submitPosition() {
+function setCoordMode(mode) {
+  coordMode = mode;
+  document.getElementById('modeDecimal').classList.toggle('active', mode === 'decimal');
+  document.getElementById('modeDM').classList.toggle('active', mode === 'dm');
+  document.getElementById('modePaste').classList.toggle('active', mode === 'paste');
+  document.getElementById('coordDecimal').style.display = mode === 'decimal' ? '' : 'none';
+  document.getElementById('coordDM').style.display = mode === 'dm' ? '' : 'none';
+  document.getElementById('coordPaste').style.display = mode === 'paste' ? '' : 'none';
+  document.getElementById('coordPreview').textContent = '';
+}
+
+function toggleDir(axis) {
+  const el = document.getElementById(axis === 'lat' ? 'dmLatDir' : 'dmLonDir');
+  if (axis === 'lat') el.textContent = el.textContent === 'N' ? 'S' : 'N';
+  else el.textContent = el.textContent === 'E' ? 'W' : 'E';
+  dmToDecimal();
+}
+
+function dmToDecimal() {
+  const latDeg = parseFloat(document.getElementById('dmLatDeg').value) || 0;
+  const latMin = parseFloat(document.getElementById('dmLatMin').value) || 0;
+  const lonDeg = parseFloat(document.getElementById('dmLonDeg').value) || 0;
+  const lonMin = parseFloat(document.getElementById('dmLonMin').value) || 0;
+  const latSign = document.getElementById('dmLatDir').textContent === 'S' ? -1 : 1;
+  const lonSign = document.getElementById('dmLonDir').textContent === 'W' ? -1 : 1;
+  const lat = latSign * (Math.abs(latDeg) + latMin / 60);
+  const lon = lonSign * (Math.abs(lonDeg) + lonMin / 60);
+  document.getElementById('finalLat').value = lat;
+  document.getElementById('finalLon').value = lon;
+  if (latDeg || latMin || lonDeg || lonMin) {
+    document.getElementById('coordPreview').textContent = '\u2192 ' + lat.toFixed(6) + '\u00B0, ' + lon.toFixed(6) + '\u00B0';
+  } else {
+    document.getElementById('coordPreview').textContent = '';
+  }
+}
+
+function parseCoordInput() {
+  const raw = document.getElementById('pasteCoordInput').value.trim();
+  if (!raw) { document.getElementById('coordPreview').textContent = ''; return; }
+
+  const parsed = parseCoordString(raw);
+  if (parsed) {
+    document.getElementById('finalLat').value = parsed.lat;
+    document.getElementById('finalLon').value = parsed.lon;
+    document.getElementById('coordPreview').textContent = '\u2192 ' + parsed.lat.toFixed(6) + '\u00B0, ' + parsed.lon.toFixed(6) + '\u00B0';
+  } else {
+    document.getElementById('coordPreview').textContent = 'Could not parse coordinates';
+    document.getElementById('finalLat').value = '';
+    document.getElementById('finalLon').value = '';
+  }
+}
+
+function parseCoordString(str) {
+  // Try decimal pair first: "35.34, 25.14" or "35.34 25.14"
+  const decMatch = str.match(/^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$/);
+  if (decMatch) {
+    return { lat: parseFloat(decMatch[1]), lon: parseFloat(decMatch[2]) };
+  }
+
+  // Parse DM/DMS components
+  // Match patterns like: 32° 28.237' N  or  32 28.237 N  or  32°28'14.2"N
+  const parts = str.split(/[,;\/]+|\s{2,}/).map(s => s.trim()).filter(Boolean);
+  if (parts.length === 2) {
+    const lat = parseSingleCoord(parts[0]);
+    const lon = parseSingleCoord(parts[1]);
+    if (lat != null && lon != null) return { lat, lon };
+  }
+
+  // Try as a single string with two coordinate groups
+  const groups = [];
+  const re = /(-?\d+)[°\s]+(\d+\.?\d*)['\u2032\s]*(\d+\.?\d*)?["\u2033\s]*([NSEW])?/gi;
+  let m;
+  while ((m = re.exec(str)) !== null) {
+    const deg = parseFloat(m[1]);
+    const min = parseFloat(m[2]) || 0;
+    const sec = parseFloat(m[3]) || 0;
+    const dir = (m[4] || '').toUpperCase();
+    let val = Math.abs(deg) + min / 60 + sec / 3600;
+    if (dir === 'S' || dir === 'W') val = -val;
+    else if (deg < 0) val = -val;
+    groups.push(val);
+  }
+  if (groups.length === 2) return { lat: groups[0], lon: groups[1] };
+
+  return null;
+}
+
+function parseSingleCoord(s) {
+  s = s.trim();
+  // Pure decimal: "-35.34"
+  if (/^-?\d+\.?\d*$/.test(s)) return parseFloat(s);
+
+  // DM or DMS with optional symbols: "32° 28.237' N" or "32 28.237 N"
+  const m = s.match(/(-?\d+)[°\s]+(\d+\.?\d*)['\u2032\s]*(\d+\.?\d*)?["\u2033\s]*([NSEW])?/i);
+  if (m) {
+    const deg = parseFloat(m[1]);
+    const min = parseFloat(m[2]) || 0;
+    const sec = parseFloat(m[3]) || 0;
+    const dir = (m[4] || '').toUpperCase();
+    let val = Math.abs(deg) + min / 60 + sec / 3600;
+    if (dir === 'S' || dir === 'W') val = -val;
+    else if (deg < 0) val = -val;
+    return val;
+  }
+  return null;
+}
+
+function updateCoordPreview() {
   const lat = parseFloat(document.getElementById('adminLat').value);
   const lon = parseFloat(document.getElementById('adminLon').value);
+  if (!isNaN(lat) && !isNaN(lon)) {
+    document.getElementById('coordPreview').textContent = '\u2192 ' + lat.toFixed(6) + '\u00B0, ' + lon.toFixed(6) + '\u00B0';
+  } else {
+    document.getElementById('coordPreview').textContent = '';
+  }
+}
+
+function getSubmitCoords() {
+  if (coordMode === 'decimal') {
+    return { lat: parseFloat(document.getElementById('adminLat').value), lon: parseFloat(document.getElementById('adminLon').value) };
+  }
+  // DM and Paste modes both write to finalLat/finalLon
+  return { lat: parseFloat(document.getElementById('finalLat').value), lon: parseFloat(document.getElementById('finalLon').value) };
+}
+
+async function submitPosition() {
+  const { lat, lon } = getSubmitCoords();
   const speed = parseFloat(document.getElementById('adminSpeed').value) || 0;
   const course = parseFloat(document.getElementById('adminCourse').value) || 0;
   const heading = parseFloat(document.getElementById('adminHeading').value) || 0;
