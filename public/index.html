@@ -819,6 +819,76 @@ body {
   color: var(--text-muted);
   margin-top: 4px;
 }
+.log-admin-actions {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 6px;
+}
+.log-admin-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 1px 3px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.log-admin-btn:hover { opacity: 1; }
+.log-edit-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.log-edit-form input {
+  width: 70px;
+  padding: 4px 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  outline: none;
+}
+.log-edit-form input:focus { border-color: var(--cyan); }
+.log-edit-form label {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.log-edit-form .edit-actions {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+}
+.log-edit-form button {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  font-family: var(--sans);
+}
+.log-edit-form .btn-save { background: var(--cyan-dim); color: white; }
+.log-edit-form .btn-save:hover { background: var(--cyan); }
+.log-edit-form .btn-cancel { background: var(--border); color: var(--text-dim); }
+.update-delete-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.72rem;
+  padding: 1px 3px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.update-delete-btn:hover { opacity: 1; }
 .update-feed { max-height: 400px; overflow-y: auto; }
 
 /* Admin action bar (mobile floating) */
@@ -2107,9 +2177,10 @@ function updateUI() {
       const p = item.data;
       const dateStr = toCET(p.timestamp, { day:'numeric', month:'short' });
       const clockStr = toCET(p.timestamp, { hour:'2-digit', minute:'2-digit' });
-      return `<div class="log-entry">
+      const adminBtns = adminUnlocked ? `<span class="log-admin-actions"><button class="log-admin-btn" onclick="editPosition(${p.id})" title="Edit">\u270F\uFE0F</button><button class="log-admin-btn" onclick="deletePosition(${p.id})" title="Delete">\uD83D\uDDD1\uFE0F</button></span>` : '';
+      return `<div class="log-entry" id="pos-entry-${p.id}">
         <div>
-          <div class="log-coords">${p.lat.toFixed(4)}°, ${p.lon.toFixed(4)}°</div>
+          <div class="log-coords">${p.lat.toFixed(4)}°, ${p.lon.toFixed(4)}°${adminBtns}</div>
           <div class="log-speed">${p.speed != null ? p.speed.toFixed(1) + ' kn' : ''}</div>
         </div>
         <div class="log-time">${dateStr} ${clockStr} <span class="tz-label">CET</span></div>
@@ -2270,6 +2341,98 @@ async function submitPosition() {
   } catch (err) {
     msg.className = 'modal-msg error';
     msg.textContent = 'Network error';
+  }
+}
+
+// --- Position Edit/Delete ---
+async function deletePosition(id) {
+  if (!confirm('Delete this position?')) return;
+  try {
+    const res = await fetch('/api/position/' + id, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Pin': savedPin }
+    });
+    if (res.ok) {
+      showToast('Position deleted');
+      fetchData();
+    } else {
+      const data = await res.json();
+      showToast(data.error || 'Error deleting');
+    }
+  } catch (err) {
+    showToast('Network error');
+  }
+}
+
+function editPosition(id) {
+  const p = historyData.find(p => p.id === id);
+  if (!p) return;
+  const entry = document.getElementById('pos-entry-' + id);
+  if (!entry) return;
+  // Check if already editing
+  if (entry.querySelector('.log-edit-form')) return;
+  const form = document.createElement('div');
+  form.className = 'log-edit-form';
+  form.innerHTML = `
+    <label>Lat<input type="number" step="any" id="editLat-${id}" value="${p.lat}"></label>
+    <label>Lon<input type="number" step="any" id="editLon-${id}" value="${p.lon}"></label>
+    <label>Speed<input type="number" step="any" id="editSpeed-${id}" value="${p.speed || 0}"></label>
+    <label>Course<input type="number" step="any" id="editCourse-${id}" value="${p.course || 0}"></label>
+    <div class="edit-actions">
+      <button class="btn-save" onclick="savePositionEdit(${id})">Save</button>
+      <button class="btn-cancel" onclick="cancelPositionEdit(${id})">Cancel</button>
+    </div>
+  `;
+  entry.appendChild(form);
+}
+
+async function savePositionEdit(id) {
+  const lat = parseFloat(document.getElementById('editLat-' + id).value);
+  const lon = parseFloat(document.getElementById('editLon-' + id).value);
+  const speed = parseFloat(document.getElementById('editSpeed-' + id).value);
+  const course = parseFloat(document.getElementById('editCourse-' + id).value);
+  if (isNaN(lat) || isNaN(lon)) { showToast('Invalid lat/lon'); return; }
+  try {
+    const res = await fetch('/api/position/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': savedPin },
+      body: JSON.stringify({ lat, lon, speed: isNaN(speed) ? 0 : speed, course: isNaN(course) ? 0 : course })
+    });
+    if (res.ok) {
+      showToast('Position updated');
+      fetchData();
+    } else {
+      const data = await res.json();
+      showToast(data.error || 'Error updating');
+    }
+  } catch (err) {
+    showToast('Network error');
+  }
+}
+
+function cancelPositionEdit(id) {
+  const entry = document.getElementById('pos-entry-' + id);
+  if (!entry) return;
+  const form = entry.querySelector('.log-edit-form');
+  if (form) form.remove();
+}
+
+async function deleteUpdate(id) {
+  if (!confirm('Delete this crew update?')) return;
+  try {
+    const res = await fetch('/api/updates/' + id, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Pin': savedPin }
+    });
+    if (res.ok) {
+      showToast('Update deleted');
+      fetchUpdates();
+    } else {
+      const data = await res.json();
+      showToast(data.error || 'Error deleting');
+    }
+  } catch (err) {
+    showToast('Network error');
   }
 }
 
@@ -2465,9 +2628,10 @@ function renderUpdateCard(u) {
     return `<button class="react-btn" onclick="sendReaction(${u.id},'${e}')">${e}${cnt > 0 ? ' <span class="react-count">' + cnt + '</span>' : ''}</button>`;
   }).join('') + '</div>';
 
-  // Pin badge and admin pin button
+  // Pin badge and admin pin/delete buttons
   const pinBadge = u.pinned ? '<span class="pin-badge">\uD83D\uDCCC Pinned</span>' : '';
   const pinBtn = adminUnlocked ? `<button class="pin-btn" onclick="togglePin(${u.id})">${u.pinned ? 'Unpin' : '\uD83D\uDCCC Pin'}</button>` : '';
+  const deleteUpdateBtn = adminUnlocked ? `<button class="update-delete-btn" onclick="deleteUpdate(${u.id})" title="Delete update">\uD83D\uDDD1\uFE0F</button>` : '';
 
   // Comments
   const comments = u.comments || [];
@@ -2493,7 +2657,7 @@ function renderUpdateCard(u) {
   return `<div class="update-card${pinnedClass}">
     <div class="update-header">
       <span class="update-crew">${u.crew_name.replace(/</g,'&lt;')}${pinBadge}</span>
-      <span class="update-time">${pinBtn}${relativeTime(u.timestamp)}</span>
+      <span class="update-time">${deleteUpdateBtn}${pinBtn}${relativeTime(u.timestamp)}</span>
     </div>
     ${msgHtml}
     ${locHtml}

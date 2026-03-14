@@ -526,7 +526,7 @@ app.post('/api/position', adminLimiter, async (req, res) => {
 });
 
 app.delete('/api/position/:id', (req, res) => {
-  const pin = req.headers['x-admin-pin'];
+  const pin = req.headers['x-admin-pin'] || req.query.pin;
   if (pin !== ADMIN_PIN) {
     return res.status(403).json({ error: 'Invalid PIN' });
   }
@@ -536,6 +536,32 @@ app.delete('/api/position/:id', (req, res) => {
   if (result.changes === 0) return res.status(404).json({ error: 'Position not found' });
   console.log(`Position ${id} deleted by admin`);
   res.json({ success: true, deleted: id });
+});
+
+app.put('/api/position/:id', adminLimiter, (req, res) => {
+  const pin = req.headers['x-admin-pin'] || req.query.pin;
+  if (pin !== ADMIN_PIN) {
+    return res.status(403).json({ error: 'Invalid PIN' });
+  }
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+  const existing = db.prepare('SELECT * FROM positions WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'Position not found' });
+
+  const { lat, lon, speed, course, heading } = req.body;
+  const updates = [];
+  const values = [];
+  if (lat != null) { updates.push('lat = ?'); values.push(lat); }
+  if (lon != null) { updates.push('lon = ?'); values.push(lon); }
+  if (speed != null) { updates.push('speed = ?'); values.push(speed); }
+  if (course != null) { updates.push('course = ?'); values.push(course); }
+  if (heading != null) { updates.push('heading = ?'); values.push(heading); }
+  if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+  values.push(id);
+  db.prepare('UPDATE positions SET ' + updates.join(', ') + ' WHERE id = ?').run(...values);
+  console.log(`Position ${id} updated by admin`);
+  res.json({ success: true });
 });
 
 // --- Updates API ---
@@ -614,6 +640,22 @@ app.post('/api/updates', adminLimiter, async (req, res) => {
   insertUpdate.run(name, message || null, photoValue, timestamp, loc.lat, loc.lon, wx.wind_speed, wx.wave_height, wx.sea_temp);
   console.log(`Update posted by ${name}: ${message || '(photo)'} [${photoUrls.length} photos] | est. location: ${loc.lat != null ? loc.lat.toFixed(4) + ',' + loc.lon.toFixed(4) : 'none'}`);
   res.json({ success: true });
+});
+
+app.delete('/api/updates/:id', adminLimiter, (req, res) => {
+  const pin = req.headers['x-admin-pin'] || req.query.pin;
+  if (pin !== ADMIN_PIN) {
+    return res.status(403).json({ error: 'Invalid PIN' });
+  }
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid update id' });
+  const result = db.prepare('DELETE FROM updates WHERE id = ?').run(id);
+  if (result.changes === 0) return res.status(404).json({ error: 'Update not found' });
+  // Clean up related reactions and comments
+  db.prepare('DELETE FROM reactions WHERE update_id = ?').run(id);
+  db.prepare('DELETE FROM comments WHERE update_id = ?').run(id);
+  console.log(`Update ${id} deleted by admin`);
+  res.json({ success: true, deleted: id });
 });
 
 // --- Reactions API ---
