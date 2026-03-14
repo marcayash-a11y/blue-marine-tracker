@@ -516,6 +516,11 @@ app.post('/api/position', adminLimiter, async (req, res) => {
   if (lat == null || lon == null) {
     return res.status(400).json({ error: 'lat and lon are required' });
   }
+  // Duplicate detection: same lat/lon within last 60 seconds
+  const recent = db.prepare("SELECT id FROM positions WHERE lat = ? AND lon = ? AND timestamp > datetime('now', '-60 seconds')").get(lat, lon);
+  if (recent) {
+    return res.status(409).json({ error: 'Duplicate position — already recorded' });
+  }
   const timestamp = req.body.timestamp || new Date().toISOString();
   try {
     await savePosition(lat, lon, speed || 0, course || 0, heading || 0, timestamp);
@@ -587,6 +592,13 @@ app.post('/api/updates', adminLimiter, async (req, res) => {
   const { crew_name, message, photo, photos } = req.body;
   if (!message && !photo && (!photos || photos.length === 0)) {
     return res.status(400).json({ error: 'Message or photo required' });
+  }
+  // Duplicate detection: same message text within last 60 seconds
+  if (message) {
+    const recent = db.prepare("SELECT id FROM updates WHERE message = ? AND timestamp > datetime('now', '-60 seconds')").get(message);
+    if (recent) {
+      return res.status(409).json({ error: 'Duplicate update — already posted' });
+    }
   }
 
   // Collect all photos (support both single 'photo' and multi 'photos')

@@ -1660,7 +1660,7 @@ body {
     <input type="datetime-local" id="adminTimestamp">
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closePositionModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="submitPosition()">Save Position</button>
+      <button class="btn btn-primary" id="btnSavePosition" onclick="submitPosition()">Save Position</button>
     </div>
     <div class="modal-msg" id="positionMsg"></div>
   </div>
@@ -2320,8 +2320,12 @@ async function submitPosition() {
   const course = parseFloat(document.getElementById('adminCourse').value) || 0;
   const heading = parseFloat(document.getElementById('adminHeading').value) || 0;
   const msg = document.getElementById('positionMsg');
+  const btn = document.getElementById('btnSavePosition');
 
   if (isNaN(lat) || isNaN(lon)) { msg.className = 'modal-msg error'; msg.textContent = 'Valid lat/lon required'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
 
   try {
     const res = await fetch('/api/position', {
@@ -2342,6 +2346,8 @@ async function submitPosition() {
     msg.className = 'modal-msg error';
     msg.textContent = 'Network error';
   }
+  btn.disabled = false;
+  btn.textContent = 'Save Position';
 }
 
 // --- Position Edit/Delete ---
