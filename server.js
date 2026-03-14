@@ -12,6 +12,7 @@ const sharp = require('sharp');
 const crypto = require('crypto');
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(compression());
 app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
