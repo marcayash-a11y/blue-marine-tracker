@@ -14,7 +14,7 @@ app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Data directory: use DATA_DIR env for persistent volumes (e.g. Railway), otherwise local ./data
-const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
+const dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 // Serve uploaded images
