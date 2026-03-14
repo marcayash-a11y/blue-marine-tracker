@@ -615,6 +615,210 @@ body {
   color: var(--text-muted);
   margin-top: 4px;
 }
+.update-reactions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.react-btn {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.react-btn:hover { border-color: var(--cyan); background: rgba(6,182,212,0.1); }
+.react-btn .react-count { font-family: var(--mono); font-size: 0.68rem; }
+.update-gallery {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.update-gallery img {
+  height: 120px;
+  border-radius: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  object-fit: cover;
+}
+.photo-previews {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.photo-previews .preview-thumb {
+  position: relative;
+  width: 70px;
+  height: 70px;
+}
+.photo-previews .preview-thumb img {
+  width: 70px;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.photo-previews .preview-thumb .remove-photo {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--red);
+  color: white;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.milestone-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+.milestone-entry .milestone-name {
+  font-weight: 600;
+  color: var(--green);
+}
+.milestone-entry .milestone-time {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.update-weather-stamp {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.update-card.pinned {
+  border: 1px solid var(--cyan);
+  background: rgba(6,182,212,0.05);
+}
+.pin-badge {
+  font-size: 0.7rem;
+  color: var(--cyan);
+  margin-left: 6px;
+}
+.pin-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding: 2px 4px;
+}
+.pin-btn:hover { color: var(--cyan); }
+.update-comments {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+}
+.comment-item {
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+}
+.comment-item .comment-name {
+  font-weight: 600;
+  color: var(--cyan);
+  margin-right: 4px;
+}
+.comment-item .comment-time {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  margin-left: 4px;
+}
+.comment-item .comment-text {
+  color: var(--text);
+}
+.comment-form {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.comment-form input {
+  flex: 0 0 80px;
+  padding: 5px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 0.75rem;
+  outline: none;
+}
+.comment-form input:focus { border-color: var(--cyan); }
+.comment-form .comment-msg-input {
+  flex: 1;
+}
+.comment-form button {
+  padding: 5px 10px;
+  background: var(--cyan-dim);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  font-family: var(--sans);
+}
+.comment-form button:hover { background: var(--cyan); }
+.toggle-comments {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: var(--sans);
+}
+.toggle-comments:hover { color: var(--cyan); }
+.digest-card {
+  background: linear-gradient(135deg, rgba(6,182,212,0.08), rgba(59,130,246,0.08));
+  border: 1px solid rgba(6,182,212,0.2);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.digest-header {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--cyan);
+  margin-bottom: 6px;
+}
+.digest-stats {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+.digest-stat-value {
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text);
+}
+.digest-weather {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
 .update-feed { max-height: 400px; overflow-y: auto; }
 
 /* Admin action bar (mobile floating) */
@@ -1412,9 +1616,9 @@ body {
       <textarea id="updateMessage" placeholder="What's happening on board?"></textarea>
     </div>
     <div class="form-group">
-      <button class="btn-choose-photo" id="btnChoosePhoto" onclick="document.getElementById('updatePhotoInput').click()">&#128247; Choose Photo</button>
-      <input type="file" id="updatePhotoInput" accept="image/*" capture="environment" style="display:none">
-      <img class="photo-preview" id="photoPreview">
+      <button class="btn-choose-photo" id="btnChoosePhoto" onclick="document.getElementById('updatePhotoInput').click()">&#128247; Add Photos (up to 5)</button>
+      <input type="file" id="updatePhotoInput" accept="image/*" capture="environment" multiple style="display:none">
+      <div class="photo-previews" id="photoPreviews"></div>
     </div>
     <button class="btn-post-update" id="btnPostUpdate" onclick="submitUpdate()">Post Update</button>
     <div class="modal-msg" id="updateMsg"></div>
@@ -1877,13 +2081,30 @@ function updateUI() {
   const nonstopDate = new Date(Date.now() + hoursLeftNonstop * 3600000);
   document.getElementById('voyageOptimisticEta').innerHTML = toCET(nonstopDate, { day: 'numeric', month: 'short' }) + ' <span class="tz-label">CET</span>';
 
-  // Position Log
+  // Position Log (interleaved with milestones)
   const logEl = document.getElementById('posLog');
-  if (historyData.length === 0) {
+  if (historyData.length === 0 && milestonesData.length === 0) {
     logEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.82rem;">No positions yet.</div>';
   } else {
+    // Merge positions and milestones into a single timeline
     const recent = historyData.slice(-30).reverse();
-    logEl.innerHTML = recent.map(p => {
+    const items = recent.map(p => ({ type: 'pos', ts: new Date(p.timestamp).getTime(), data: p }));
+    for (const m of milestonesData) {
+      items.push({ type: 'milestone', ts: new Date(m.timestamp).getTime(), data: m });
+    }
+    items.sort((a, b) => b.ts - a.ts);
+
+    logEl.innerHTML = items.map(item => {
+      if (item.type === 'milestone') {
+        const m = item.data;
+        const dateStr = toCET(m.timestamp, { day:'numeric', month:'short' });
+        const clockStr = toCET(m.timestamp, { hour:'2-digit', minute:'2-digit' });
+        return `<div class="milestone-entry">
+          <span class="milestone-name">\uD83C\uDFC1 Passed ${m.name}</span>
+          <span class="milestone-time">${dateStr} ${clockStr} <span class="tz-label">CET</span></span>
+        </div>`;
+      }
+      const p = item.data;
       const dateStr = toCET(p.timestamp, { day:'numeric', month:'short' });
       const clockStr = toCET(p.timestamp, { hour:'2-digit', minute:'2-digit' });
       return `<div class="log-entry">
@@ -2054,7 +2275,9 @@ async function submitPosition() {
 
 // --- Crew Updates ---
 let updatesData = [];
-let selectedPhoto = null;
+let digestsData = [];
+let milestonesData = [];
+let selectedPhotos = [];
 let crewUpdateMarkers = [];
 
 function openUpdateModal() {
@@ -2068,31 +2291,52 @@ function openUpdateModal() {
 
 function closeUpdateModal() {
   document.getElementById('updateModal').classList.add('hidden');
-  selectedPhoto = null;
-  document.getElementById('photoPreview').style.display = 'none';
+  selectedPhotos = [];
+  document.getElementById('photoPreviews').innerHTML = '';
   document.getElementById('btnChoosePhoto').classList.remove('has-photo');
-  document.getElementById('btnChoosePhoto').innerHTML = '&#128247; Choose Photo';
+  document.getElementById('btnChoosePhoto').innerHTML = '&#128247; Add Photos (up to 5)';
 }
 
 document.getElementById('updateModal').addEventListener('click', (e) => {
   if (e.target === document.getElementById('updateModal')) closeUpdateModal();
 });
 
-// Photo file input handler
+// Photo file input handler (multi-photo)
 document.getElementById('updatePhotoInput').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    selectedPhoto = ev.target.result;
-    const preview = document.getElementById('photoPreview');
-    preview.src = selectedPhoto;
-    preview.style.display = 'block';
-    document.getElementById('btnChoosePhoto').classList.add('has-photo');
-    document.getElementById('btnChoosePhoto').innerHTML = '&#9989; Photo selected';
-  };
-  reader.readAsDataURL(file);
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  const remaining = 5 - selectedPhotos.length;
+  const toAdd = files.slice(0, remaining);
+  for (const file of toAdd) {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      selectedPhotos.push(ev.target.result);
+      renderPhotoPreviewsModal();
+    };
+    reader.readAsDataURL(file);
+  }
+  e.target.value = '';
 });
+
+function renderPhotoPreviewsModal() {
+  const container = document.getElementById('photoPreviews');
+  container.innerHTML = selectedPhotos.map((src, i) =>
+    `<div class="preview-thumb"><img src="${src}"><button class="remove-photo" onclick="removePhoto(${i})">&times;</button></div>`
+  ).join('');
+  const btn = document.getElementById('btnChoosePhoto');
+  if (selectedPhotos.length > 0) {
+    btn.classList.add('has-photo');
+    btn.innerHTML = '&#9989; ' + selectedPhotos.length + ' photo' + (selectedPhotos.length > 1 ? 's' : '') + (selectedPhotos.length < 5 ? ' (+ add more)' : '');
+  } else {
+    btn.classList.remove('has-photo');
+    btn.innerHTML = '&#128247; Add Photos (up to 5)';
+  }
+}
+
+function removePhoto(idx) {
+  selectedPhotos.splice(idx, 1);
+  renderPhotoPreviewsModal();
+}
 
 async function submitUpdate() {
   const crewName = document.getElementById('updateCrewName').value.trim() || 'Crew';
@@ -2100,34 +2344,32 @@ async function submitUpdate() {
   const msg = document.getElementById('updateMsg');
   const btn = document.getElementById('btnPostUpdate');
 
-  if (!message && !selectedPhoto) {
+  if (!message && selectedPhotos.length === 0) {
     msg.className = 'modal-msg error';
     msg.textContent = 'Write a message or choose a photo';
     return;
   }
 
-  // Save crew name for next time
   localStorage.setItem('crewName', crewName);
-
   btn.disabled = true;
   btn.textContent = 'Posting...';
 
   try {
+    const body = { crew_name: crewName, message: message || null };
+    if (selectedPhotos.length === 1) body.photo = selectedPhotos[0];
+    else if (selectedPhotos.length > 1) body.photos = selectedPhotos;
+
     const res = await fetch('/api/updates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': savedPin },
-      body: JSON.stringify({ crew_name: crewName, message: message || null, photo: selectedPhoto })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (res.ok) {
       msg.className = 'modal-msg success';
       msg.textContent = 'Posted!';
       document.getElementById('updateMessage').value = '';
-      document.getElementById('updatePhotoInput').value = '';
-      selectedPhoto = null;
-      document.getElementById('photoPreview').style.display = 'none';
-      document.getElementById('btnChoosePhoto').classList.remove('has-photo');
-      document.getElementById('btnChoosePhoto').innerHTML = '&#128247; Choose Photo';
+      selectedPhotos = [];
       setTimeout(() => { closeUpdateModal(); fetchUpdates(); }, 800);
     } else {
       msg.className = 'modal-msg error';
@@ -2172,37 +2414,119 @@ function nearestCoastName(lat, lon) {
   return minDist < 100 ? closest : null;
 }
 
+function getPhotoUrls(u) {
+  if (!u.photo_url) return [];
+  if (u.photo_url.startsWith('[')) {
+    try { return JSON.parse(u.photo_url); } catch (e) { return [u.photo_url]; }
+  }
+  return [u.photo_url];
+}
+
+function renderDigestCard(d) {
+  return `<div class="digest-card">
+    <div class="digest-header">\uD83D\uDCCA Day ${d.day_number} at Sea \u2014 ${new Date(d.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
+    <div class="digest-stats">
+      <span>Distance: <span class="digest-stat-value">${d.distance_nm} nm</span></span>
+      <span>Avg: <span class="digest-stat-value">${d.avg_speed} kn</span></span>
+      <span>Max: <span class="digest-stat-value">${d.max_speed} kn</span></span>
+      <span>Positions: <span class="digest-stat-value">${d.positions_count}</span></span>
+      ${d.updates_count > 0 ? '<span>Updates: <span class="digest-stat-value">' + d.updates_count + '</span></span>' : ''}
+    </div>
+    ${d.weather_summary ? '<div class="digest-weather">\uD83C\uDF0A ' + d.weather_summary + '</div>' : ''}
+  </div>`;
+}
+
+function renderUpdateCard(u) {
+  const emojis = ['\u2764\uFE0F', '\uD83D\uDC4F', '\uD83C\uDF0A', '\u26F5', '\uD83D\uDE4F'];
+  const photos = getPhotoUrls(u);
+  let photoHtml = '';
+  if (photos.length === 1) {
+    photoHtml = `<img class="update-photo" src="${photos[0]}" alt="Photo" loading="lazy" onclick="openLightbox('${photos[0]}')">`;
+  } else if (photos.length > 1) {
+    photoHtml = '<div class="update-gallery">' + photos.map(p => `<img src="${p}" alt="Photo" loading="lazy" onclick="openLightbox('${p}')">`).join('') + '</div>';
+  }
+  const msgHtml = u.message ? `<div class="update-message">${u.message.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>` : '';
+  let locHtml = '';
+  if (u.estimated_lat != null && u.estimated_lon != null) {
+    const coast = nearestCoastName(u.estimated_lat, u.estimated_lon);
+    locHtml = `<div class="update-location">\u{1F4CD} ${coast ? 'Near ' + coast : 'Estimated position'}</div>`;
+  }
+  // Weather stamp
+  let wxHtml = '';
+  const wxParts = [];
+  if (u.wind_speed != null) wxParts.push(u.wind_speed.toFixed(0) + ' km/h winds');
+  if (u.wave_height != null) wxParts.push(u.wave_height.toFixed(1) + 'm waves');
+  if (u.sea_temp != null) wxParts.push(u.sea_temp.toFixed(0) + '\u00B0C');
+  if (wxParts.length > 0) wxHtml = `<div class="update-weather-stamp">\uD83C\uDF0A ${wxParts.join(' \u00B7 ')}</div>`;
+
+  const reactions = u.reactions || {};
+  const reactHtml = '<div class="update-reactions">' + emojis.map(e => {
+    const cnt = reactions[e] || 0;
+    return `<button class="react-btn" onclick="sendReaction(${u.id},'${e}')">${e}${cnt > 0 ? ' <span class="react-count">' + cnt + '</span>' : ''}</button>`;
+  }).join('') + '</div>';
+
+  // Pin badge and admin pin button
+  const pinBadge = u.pinned ? '<span class="pin-badge">\uD83D\uDCCC Pinned</span>' : '';
+  const pinBtn = adminUnlocked ? `<button class="pin-btn" onclick="togglePin(${u.id})">${u.pinned ? 'Unpin' : '\uD83D\uDCCC Pin'}</button>` : '';
+
+  // Comments
+  const comments = u.comments || [];
+  const commentCount = comments.length;
+  let commentsHtml = '<div class="update-comments">';
+  commentsHtml += `<button class="toggle-comments" onclick="toggleComments(${u.id})">💬 ${commentCount > 0 ? commentCount + ' comment' + (commentCount !== 1 ? 's' : '') : 'Add comment'}</button>`;
+  commentsHtml += `<div id="comments-${u.id}" style="display:none;">`;
+  if (commentCount > 0) {
+    commentsHtml += comments.map(c => {
+      const cName = c.name.replace(/</g, '&lt;');
+      const cMsg = c.message.replace(/</g, '&lt;').replace(/\n/g, '<br>');
+      return `<div class="comment-item"><span class="comment-name">${cName}</span><span class="comment-text">${cMsg}</span><span class="comment-time">${relativeTime(c.timestamp)}</span></div>`;
+    }).join('');
+  }
+  commentsHtml += `<div class="comment-form">
+    <input type="text" placeholder="Name" maxlength="30" id="commentName-${u.id}" value="${(localStorage.getItem('commentName') || '').replace(/"/g, '&quot;')}">
+    <input type="text" class="comment-msg-input" placeholder="Write a comment..." maxlength="500" id="commentMsg-${u.id}" onkeydown="if(event.key==='Enter')submitComment(${u.id})">
+    <button onclick="submitComment(${u.id})">Send</button>
+  </div>`;
+  commentsHtml += '</div></div>';
+
+  const pinnedClass = u.pinned ? ' pinned' : '';
+  return `<div class="update-card${pinnedClass}">
+    <div class="update-header">
+      <span class="update-crew">${u.crew_name.replace(/</g,'&lt;')}${pinBadge}</span>
+      <span class="update-time">${pinBtn}${relativeTime(u.timestamp)}</span>
+    </div>
+    ${msgHtml}
+    ${locHtml}
+    ${wxHtml}
+    ${photoHtml}
+    ${reactHtml}
+    ${commentsHtml}
+  </div>`;
+}
+
 function renderUpdates() {
   const el = document.getElementById('updateFeed');
-  if (updatesData.length === 0) {
+  if (updatesData.length === 0 && digestsData.length === 0) {
     el.innerHTML = '<div style="color: var(--text-muted); font-size: 0.82rem;">No updates yet.</div>';
     return;
   }
-  el.innerHTML = updatesData.map(u => {
-    const photoHtml = u.photo_url ? `<img class="update-photo" src="${u.photo_url}" alt="Photo" loading="lazy" onclick="openLightbox('${u.photo_url}')">` : '';
-    const msgHtml = u.message ? `<div class="update-message">${u.message.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>` : '';
-    let locHtml = '';
-    if (u.estimated_lat != null && u.estimated_lon != null) {
-      const coast = nearestCoastName(u.estimated_lat, u.estimated_lon);
-      locHtml = `<div class="update-location">\u{1F4CD} ${coast ? 'Near ' + coast : 'Estimated position'}</div>`;
-    }
-    return `<div class="update-card">
-      <div class="update-header">
-        <span class="update-crew">${u.crew_name.replace(/</g,'&lt;')}</span>
-        <span class="update-time">${relativeTime(u.timestamp)}</span>
-      </div>
-      ${msgHtml}
-      ${locHtml}
-      ${photoHtml}
-    </div>`;
+
+  // Interleave updates and digests by timestamp
+  const items = [];
+  for (const u of updatesData) items.push({ type: 'update', ts: new Date(u.timestamp).getTime(), pinned: u.pinned || 0, data: u });
+  for (const d of digestsData) items.push({ type: 'digest', ts: new Date(d.date + 'T23:59:59Z').getTime(), pinned: 0, data: d });
+  // Pinned first, then by timestamp desc
+  items.sort((a, b) => b.pinned - a.pinned || b.ts - a.ts);
+
+  el.innerHTML = items.map(item => {
+    if (item.type === 'digest') return renderDigestCard(item.data);
+    return renderUpdateCard(item.data);
   }).join('');
 
-  // Update map markers for crew updates with locations
   renderCrewUpdateMarkers();
 }
 
 function renderCrewUpdateMarkers() {
-  // Remove old markers
   crewUpdateMarkers.forEach(m => map.removeLayer(m));
   crewUpdateMarkers = [];
 
@@ -2218,7 +2542,10 @@ function renderCrewUpdateMarkers() {
     const escapedMsg = u.message ? u.message.replace(/</g, '&lt;').replace(/\n/g, '<br>') : '';
     let popupContent = `<b>${escapedName}</b> <small>${relativeTime(u.timestamp)}</small>`;
     if (escapedMsg) popupContent += `<br>${escapedMsg}`;
-    if (u.photo_url) popupContent += `<br><img src="${u.photo_url}" style="max-width:200px; border-radius:6px; margin-top:4px;" onclick="openLightbox('${u.photo_url}')">`;
+    const photos = getPhotoUrls(u);
+    if (photos.length > 0) {
+      popupContent += '<br>' + photos.map(p => `<img src="${p}" style="max-width:200px; border-radius:6px; margin-top:4px;" onclick="openLightbox('${p}')">`).join('');
+    }
 
     const marker = L.marker([u.estimated_lat, u.estimated_lon], { icon, zIndexOffset: 500 })
       .bindPopup(popupContent, { maxWidth: 250 })
@@ -2239,6 +2566,86 @@ async function fetchUpdates() {
     renderUpdates();
   } catch (err) {
     console.error('Updates fetch error:', err);
+  }
+}
+
+async function sendReaction(updateId, emoji) {
+  try {
+    const res = await fetch('/api/updates/' + updateId + '/react', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emoji })
+    });
+    const data = await res.json();
+    if (data.reactions) {
+      const u = updatesData.find(u => u.id === updateId);
+      if (u) { u.reactions = data.reactions; renderUpdates(); }
+    }
+  } catch (err) {
+    console.error('Reaction error:', err);
+  }
+}
+
+async function fetchMilestones() {
+  try {
+    const res = await fetch('/api/milestones');
+    milestonesData = await res.json();
+  } catch (err) {
+    console.error('Milestones fetch error:', err);
+  }
+}
+
+async function fetchDigests() {
+  try {
+    const res = await fetch('/api/digests');
+    digestsData = await res.json();
+  } catch (err) {
+    console.error('Digests fetch error:', err);
+  }
+}
+
+function toggleComments(updateId) {
+  const el = document.getElementById('comments-' + updateId);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function submitComment(updateId) {
+  const nameEl = document.getElementById('commentName-' + updateId);
+  const msgEl = document.getElementById('commentMsg-' + updateId);
+  const name = (nameEl.value || '').trim() || 'Anonymous';
+  const message = (msgEl.value || '').trim();
+  if (!message) return;
+  localStorage.setItem('commentName', name);
+  try {
+    const res = await fetch('/api/updates/' + updateId + '/comment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, message })
+    });
+    const data = await res.json();
+    if (data.comments) {
+      const u = updatesData.find(u => u.id === updateId);
+      if (u) { u.comments = data.comments; renderUpdates(); }
+      // Re-open the comments section after re-render
+      setTimeout(() => {
+        const el = document.getElementById('comments-' + updateId);
+        if (el) el.style.display = '';
+      }, 0);
+    }
+  } catch (err) {
+    console.error('Comment error:', err);
+  }
+}
+
+async function togglePin(updateId) {
+  try {
+    const res = await fetch('/api/updates/' + updateId + '/pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': savedPin }
+    });
+    if (res.ok) fetchUpdates();
+  } catch (err) {
+    console.error('Pin error:', err);
   }
 }
 
@@ -2325,13 +2732,15 @@ function renderForecast(data) {
 
 // --- Init ---
 initMap();
-fetchConfig().then(() => fetchData());
+fetchConfig().then(() => { fetchMilestones().then(() => fetchData()); });
 fetchUpdates();
+fetchDigests();
 fetchForecast();
 
 // Auto-refresh every 60 seconds
 setInterval(fetchData, 60000);
 setInterval(fetchUpdates, 60000);
+setInterval(fetchMilestones, 60000);
 // Forecast refreshes every 5 minutes (changes slowly)
 setInterval(fetchForecast, 300000);
 

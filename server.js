@@ -1,5 +1,7 @@
 require('dotenv').config();
 const express = require('express');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
 const Database = require('better-sqlite3');
 const WebSocket = require('ws');
 const path = require('path');
@@ -10,8 +12,15 @@ const sharp = require('sharp');
 const crypto = require('crypto');
 
 const app = express();
+app.use(compression());
 app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// --- Rate Limiting ---
+const readLimiter = rateLimit({ windowMs: 60000, max: 60, standardHeaders: true, legacyHeaders: false });
+const adminLimiter = rateLimit({ windowMs: 60000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many requests, try again later' } });
+const reactLimiter = rateLimit({ windowMs: 60000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many reactions, slow down' } });
+const commentLimiter = rateLimit({ windowMs: 60000, max: 10, standardHeaders: true, legacyHeaders: false, message: { error: 'Too many comments, slow down' } });
 
 // Data directory: use DATA_DIR env for persistent volumes (e.g. Railway), otherwise local ./data
 const dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, 'data');
@@ -90,6 +99,10 @@ db.exec(`
 // Add columns if they don't exist (migration for existing databases)
 try { db.exec('ALTER TABLE updates ADD COLUMN estimated_lat REAL'); } catch (e) { /* already exists */ }
 try { db.exec('ALTER TABLE updates ADD COLUMN estimated_lon REAL'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE updates ADD COLUMN wind_speed REAL'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE updates ADD COLUMN wave_height REAL'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE updates ADD COLUMN sea_temp REAL'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE updates ADD COLUMN pinned INTEGER DEFAULT 0'); } catch (e) { /* already exists */ }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS forecast_cache (
@@ -102,9 +115,56 @@ db.exec(`
   )
 `);
 
-const insertUpdate = db.prepare('INSERT INTO updates (crew_name, message, photo_url, timestamp, estimated_lat, estimated_lon) VALUES (?, ?, ?, ?, ?, ?)');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS milestones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    lat REAL NOT NULL,
+    lon REAL NOT NULL,
+    timestamp TEXT NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS reactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    update_id INTEGER NOT NULL,
+    emoji TEXT NOT NULL,
+    count INTEGER NOT NULL DEFAULT 1,
+    UNIQUE(update_id, emoji)
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    update_id INTEGER NOT NULL,
+    name TEXT NOT NULL DEFAULT 'Anonymous',
+    message TEXT NOT NULL,
+    timestamp TEXT NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS digests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    day_number INTEGER NOT NULL,
+    date TEXT NOT NULL UNIQUE,
+    distance_nm REAL,
+    avg_speed REAL,
+    max_speed REAL,
+    positions_count INTEGER,
+    updates_count INTEGER,
+    weather_summary TEXT,
+    timestamp TEXT NOT NULL
+  )
+`);
+
+const insertUpdate = db.prepare('INSERT INTO updates (crew_name, message, photo_url, timestamp, estimated_lat, estimated_lon, wind_speed, wave_height, sea_temp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
 const getUpdates = db.prepare('SELECT * FROM updates ORDER BY id DESC LIMIT 50');
 const updateEstimatedLocation = db.prepare('UPDATE updates SET estimated_lat = ?, estimated_lon = ? WHERE id = ?');
+const pinUpdate = db.prepare('UPDATE updates SET pinned = ? WHERE id = ?');
+const unpinAll = db.prepare('UPDATE updates SET pinned = 0 WHERE pinned = 1');
 const getUpdatesNearTime = db.prepare('SELECT id, timestamp FROM updates WHERE estimated_lat IS NOT NULL AND abs(julianday(timestamp) - julianday(?)) < (2.0/24.0)');
 const getPositionBefore = db.prepare('SELECT * FROM positions WHERE timestamp <= ? ORDER BY timestamp DESC LIMIT 1');
 const getPositionAfter = db.prepare('SELECT * FROM positions WHERE timestamp > ? ORDER BY timestamp ASC LIMIT 1');
@@ -117,6 +177,22 @@ const insertPosition = db.prepare(`
 
 const getLatest = db.prepare('SELECT * FROM positions ORDER BY id DESC LIMIT 1');
 const getHistory = db.prepare('SELECT * FROM positions ORDER BY id ASC');
+
+const insertMilestone = db.prepare('INSERT INTO milestones (name, lat, lon, timestamp) VALUES (?, ?, ?, ?)');
+const getMilestones = db.prepare('SELECT * FROM milestones ORDER BY id ASC');
+const getMilestoneByName = db.prepare('SELECT id FROM milestones WHERE name = ?');
+
+const upsertReaction = db.prepare('INSERT INTO reactions (update_id, emoji, count) VALUES (?, ?, 1) ON CONFLICT(update_id, emoji) DO UPDATE SET count = count + 1');
+const getReactionsForUpdate = db.prepare('SELECT emoji, count FROM reactions WHERE update_id = ?');
+
+const insertComment = db.prepare('INSERT INTO comments (update_id, name, message, timestamp) VALUES (?, ?, ?, ?)');
+const getCommentsForUpdate = db.prepare('SELECT * FROM comments WHERE update_id = ? ORDER BY id DESC LIMIT 50');
+
+const insertDigest = db.prepare('INSERT OR IGNORE INTO digests (day_number, date, distance_nm, avg_speed, max_speed, positions_count, updates_count, weather_summary, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+const getDigests = db.prepare('SELECT * FROM digests ORDER BY date DESC LIMIT 30');
+const getDigestByDate = db.prepare('SELECT id FROM digests WHERE date = ?');
+const getPositionsForDate = db.prepare("SELECT * FROM positions WHERE date(timestamp) = ? ORDER BY timestamp ASC");
+const getUpdatesCountForDate = db.prepare("SELECT count(*) as cnt FROM updates WHERE date(timestamp) = ?");
 
 // --- Weather Fetching ---
 function fetchJSON(url) {
@@ -294,6 +370,23 @@ function retroactivelyUpdateLocations(newTimestamp) {
   }
 }
 
+// --- Milestone Detection ---
+const MILESTONE_WAYPOINTS = ROUTE_WAYPOINTS.filter(w => w.name !== 'Open Sea' && w.name !== 'Ismailia');
+const MILESTONE_RADIUS_NM = 30;
+
+function checkMilestones(lat, lon, timestamp) {
+  for (const wp of MILESTONE_WAYPOINTS) {
+    const dist = haversineNm(lat, lon, wp.lat, wp.lon);
+    if (dist <= MILESTONE_RADIUS_NM) {
+      const existing = getMilestoneByName.get(wp.name);
+      if (!existing) {
+        insertMilestone.run(wp.name, lat, lon, timestamp);
+        console.log(`Milestone reached: ${wp.name} at ${dist.toFixed(1)} nm`);
+      }
+    }
+  }
+}
+
 // --- Save Position ---
 async function savePosition(lat, lon, speed, course, heading, timestamp) {
   const weather = await fetchWeather(lat, lon);
@@ -303,6 +396,8 @@ async function savePosition(lat, lon, speed, course, heading, timestamp) {
     weather.wave_height, weather.wave_period, weather.swell_height, weather.sea_temp
   );
   console.log(`Position saved: ${lat.toFixed(4)}, ${lon.toFixed(4)} @ ${speed} kn | ${timestamp}`);
+  // Check for voyage milestones
+  try { checkMilestones(lat, lon, timestamp); } catch (err) { console.error('Milestone check error:', err.message); }
   // Retroactively improve crew update locations near this position
   try { retroactivelyUpdateLocations(timestamp); } catch (err) { console.error('Retroactive location update error:', err.message); }
   // Update forecast cache in background (non-blocking)
@@ -376,17 +471,22 @@ app.get('/api/debug', (req, res) => {
   });
 });
 
-app.get('/api/latest', (req, res) => {
+app.get('/api/latest', readLimiter, (req, res) => {
   const row = getLatest.get();
   res.json(row || null);
 });
 
-app.get('/api/history', (req, res) => {
+app.get('/api/history', readLimiter, (req, res) => {
   const rows = getHistory.all();
   res.json(rows);
 });
 
-app.get('/api/config', (req, res) => {
+app.get('/api/milestones', readLimiter, (req, res) => {
+  const rows = getMilestones.all();
+  res.json(rows);
+});
+
+app.get('/api/config', readLimiter, (req, res) => {
   res.json({
     mmsi: MMSI,
     vesselName: 'BLUE MARINE',
@@ -406,7 +506,7 @@ app.post('/api/verify-pin', (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/api/position', async (req, res) => {
+app.post('/api/position', adminLimiter, async (req, res) => {
   const pin = req.headers['x-admin-pin'] || req.body.pin;
   if (pin !== ADMIN_PIN) {
     return res.status(403).json({ error: 'Invalid PIN' });
@@ -438,29 +538,43 @@ app.delete('/api/position/:id', (req, res) => {
 });
 
 // --- Updates API ---
-app.get('/api/updates', (req, res) => {
+app.get('/api/updates', readLimiter, (req, res) => {
   const rows = getUpdates.all();
-  res.json(rows);
+  const result = rows.map(u => {
+    const reactions = getReactionsForUpdate.all(u.id);
+    const reactionMap = {};
+    for (const r of reactions) reactionMap[r.emoji] = r.count;
+    const comments = getCommentsForUpdate.all(u.id);
+    return { ...u, reactions: reactionMap, comments };
+  });
+  // Put pinned updates first, then the rest by id desc (already sorted)
+  result.sort((a, b) => (b.pinned || 0) - (a.pinned || 0));
+  res.json(result);
 });
 
-app.post('/api/updates', async (req, res) => {
+app.post('/api/updates', adminLimiter, async (req, res) => {
   const pin = req.headers['x-admin-pin'] || req.body.pin;
   if (pin !== ADMIN_PIN) {
     return res.status(403).json({ error: 'Invalid PIN' });
   }
-  const { crew_name, message, photo } = req.body;
-  if (!message && !photo) {
+  const { crew_name, message, photo, photos } = req.body;
+  if (!message && !photo && (!photos || photos.length === 0)) {
     return res.status(400).json({ error: 'Message or photo required' });
   }
 
-  let photoUrl = null;
-  if (photo) {
+  // Collect all photos (support both single 'photo' and multi 'photos')
+  const photoSources = [];
+  if (photos && Array.isArray(photos)) {
+    photoSources.push(...photos.slice(0, 5));
+  } else if (photo) {
+    photoSources.push(photo);
+  }
+
+  const photoUrls = [];
+  for (const src of photoSources) {
     try {
-      // photo is a base64 data URI
-      const matches = photo.match(/^data:image\/\w+;base64,(.+)$/);
-      if (!matches) {
-        return res.status(400).json({ error: 'Invalid photo format' });
-      }
+      const matches = src.match(/^data:image\/\w+;base64,(.+)$/);
+      if (!matches) continue;
       const buf = Buffer.from(matches[1], 'base64');
       const filename = crypto.randomBytes(8).toString('hex') + '.jpg';
       const outPath = path.join(uploadsDir, filename);
@@ -468,23 +582,159 @@ app.post('/api/updates', async (req, res) => {
         .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 80 })
         .toFile(outPath);
-      photoUrl = '/uploads/' + filename;
+      photoUrls.push('/uploads/' + filename);
     } catch (err) {
       console.error('Photo processing error:', err.message);
-      return res.status(500).json({ error: 'Failed to process photo' });
     }
   }
+
+  // Store as JSON array if multiple, single string if one, null if none
+  let photoValue = null;
+  if (photoUrls.length === 1) photoValue = photoUrls[0];
+  else if (photoUrls.length > 1) photoValue = JSON.stringify(photoUrls);
 
   const timestamp = new Date().toISOString();
   const name = (crew_name || 'Crew').trim().slice(0, 30);
   const loc = estimateLocation(timestamp);
-  insertUpdate.run(name, message || null, photoUrl, timestamp, loc.lat, loc.lon);
-  console.log(`Update posted by ${name}: ${message || '(photo)'} | est. location: ${loc.lat != null ? loc.lat.toFixed(4) + ',' + loc.lon.toFixed(4) : 'none'}`);
+
+  // Fetch weather at estimated position for the weather stamp
+  let wx = { wind_speed: null, wave_height: null, sea_temp: null };
+  if (loc.lat != null) {
+    try {
+      const w = await fetchWeather(loc.lat, loc.lon);
+      wx.wind_speed = w.wind_speed;
+      wx.wave_height = w.wave_height;
+      wx.sea_temp = w.sea_temp;
+    } catch (err) {
+      console.error('Weather stamp fetch error:', err.message);
+    }
+  }
+
+  insertUpdate.run(name, message || null, photoValue, timestamp, loc.lat, loc.lon, wx.wind_speed, wx.wave_height, wx.sea_temp);
+  console.log(`Update posted by ${name}: ${message || '(photo)'} [${photoUrls.length} photos] | est. location: ${loc.lat != null ? loc.lat.toFixed(4) + ',' + loc.lon.toFixed(4) : 'none'}`);
   res.json({ success: true });
 });
 
+// --- Reactions API ---
+app.post('/api/updates/:id/react', reactLimiter, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid update id' });
+  const { emoji } = req.body;
+  const allowed = ['\u2764\uFE0F', '\uD83D\uDC4F', '\uD83C\uDF0A', '\u26F5', '\uD83D\uDE4F'];
+  if (!emoji || !allowed.includes(emoji)) {
+    return res.status(400).json({ error: 'Invalid emoji' });
+  }
+  upsertReaction.run(id, emoji);
+  const reactions = getReactionsForUpdate.all(id);
+  const reactionMap = {};
+  for (const r of reactions) reactionMap[r.emoji] = r.count;
+  res.json({ success: true, reactions: reactionMap });
+});
+
+// --- Comments API ---
+app.post('/api/updates/:id/comment', commentLimiter, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid update id' });
+  const { name, message } = req.body;
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: 'Message is required' });
+  }
+  const cleanName = (name || 'Anonymous').trim().slice(0, 30);
+  const cleanMsg = message.trim().slice(0, 500);
+  const timestamp = new Date().toISOString();
+  insertComment.run(id, cleanName, cleanMsg, timestamp);
+  const comments = getCommentsForUpdate.all(id);
+  res.json({ success: true, comments });
+});
+
+// --- Pin API ---
+app.post('/api/updates/:id/pin', adminLimiter, (req, res) => {
+  const pin = req.headers['x-admin-pin'] || req.body.pin;
+  if (pin !== ADMIN_PIN) {
+    return res.status(403).json({ error: 'Invalid PIN' });
+  }
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid update id' });
+  // Check if already pinned — toggle off
+  const update = db.prepare('SELECT pinned FROM updates WHERE id = ?').get(id);
+  if (!update) return res.status(404).json({ error: 'Update not found' });
+  if (update.pinned) {
+    pinUpdate.run(0, id);
+    res.json({ success: true, pinned: false });
+  } else {
+    unpinAll.run();
+    pinUpdate.run(1, id);
+    res.json({ success: true, pinned: true });
+  }
+});
+
+// --- Digests API ---
+app.get('/api/digests', readLimiter, (req, res) => {
+  const rows = getDigests.all();
+  res.json(rows);
+});
+
+// --- Daily Digest Generation ---
+function generateDailyDigest() {
+  // Get the first position timestamp to determine day 1
+  const firstPos = db.prepare('SELECT timestamp FROM positions ORDER BY id ASC LIMIT 1').get();
+  if (!firstPos) return;
+
+  const startDate = new Date(firstPos.timestamp);
+  startDate.setUTCHours(0, 0, 0, 0);
+
+  // Generate digest for yesterday (CET = UTC+1, so yesterday in CET)
+  const now = new Date();
+  const cetOffset = 1; // CET is UTC+1 (simplified)
+  const cetNow = new Date(now.getTime() + cetOffset * 3600000);
+  const yesterday = new Date(cetNow);
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const dateStr = yesterday.toISOString().slice(0, 10);
+
+  // Skip if already generated
+  if (getDigestByDate.get(dateStr)) return;
+
+  const positions = getPositionsForDate.all(dateStr);
+  if (positions.length === 0) return;
+
+  // Calculate distance by summing segments
+  let totalDist = 0;
+  for (let i = 1; i < positions.length; i++) {
+    totalDist += haversineNm(positions[i - 1].lat, positions[i - 1].lon, positions[i].lat, positions[i].lon);
+  }
+
+  const speeds = positions.filter(p => p.speed != null).map(p => p.speed);
+  const avgSpeed = speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0;
+  const maxSpeed = speeds.length > 0 ? Math.max(...speeds) : 0;
+
+  // Weather summary from position data
+  const winds = positions.filter(p => p.wind_speed != null).map(p => p.wind_speed);
+  const waves = positions.filter(p => p.wave_height != null).map(p => p.wave_height);
+  const temps = positions.filter(p => p.sea_temp != null).map(p => p.sea_temp);
+  const weatherParts = [];
+  if (winds.length > 0) weatherParts.push('Wind ' + Math.round(Math.max(...winds)) + ' km/h');
+  if (waves.length > 0) weatherParts.push('Waves ' + (Math.max(...waves)).toFixed(1) + 'm');
+  if (temps.length > 0) weatherParts.push(Math.round(temps.reduce((a, b) => a + b, 0) / temps.length) + '\u00B0C');
+  const weatherSummary = weatherParts.join(' \u00B7 ') || null;
+
+  // Count updates for that day
+  const updatesCount = getUpdatesCountForDate.get(dateStr).cnt;
+
+  // Calculate day number
+  const dayNumber = Math.floor((new Date(dateStr) - startDate) / 86400000) + 1;
+
+  insertDigest.run(dayNumber, dateStr, Math.round(totalDist * 10) / 10, Math.round(avgSpeed * 10) / 10, Math.round(maxSpeed * 10) / 10, positions.length, updatesCount, weatherSummary, new Date().toISOString());
+  console.log(`Daily digest generated: Day ${dayNumber} (${dateStr}) — ${totalDist.toFixed(1)} nm, ${positions.length} positions`);
+}
+
+// Run digest generation on startup and then every hour
+try { generateDailyDigest(); } catch (err) { console.error('Digest generation error:', err.message); }
+setInterval(() => {
+  try { generateDailyDigest(); } catch (err) { console.error('Digest generation error:', err.message); }
+}, 3600000);
+
 // --- Forecast API ---
-app.get('/api/forecast', (req, res) => {
+app.get('/api/forecast', readLimiter, (req, res) => {
   const rows = db.prepare('SELECT * FROM forecast_cache ORDER BY id ASC').all();
   if (rows.length === 0) return res.json({ summary: [], fetched_at: null });
 
