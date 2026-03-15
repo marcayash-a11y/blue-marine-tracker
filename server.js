@@ -345,7 +345,7 @@ const upsertReaction = db.prepare('INSERT INTO reactions (update_id, emoji, coun
 const getReactionsForUpdate = db.prepare('SELECT emoji, count FROM reactions WHERE update_id = ?');
 
 const insertComment = db.prepare('INSERT INTO comments (update_id, name, message, timestamp) VALUES (?, ?, ?, ?)');
-const getCommentsForUpdate = db.prepare('SELECT * FROM comments WHERE update_id = ? ORDER BY id DESC LIMIT 50');
+const getCommentsForUpdate = db.prepare('SELECT * FROM comments WHERE update_id = ? ORDER BY id ASC LIMIT 50');
 
 const insertDigest = db.prepare('INSERT OR IGNORE INTO digests (day_number, date, distance_nm, avg_speed, max_speed, positions_count, updates_count, weather_summary, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
 const getDigests = db.prepare('SELECT * FROM digests ORDER BY date DESC LIMIT 30');
