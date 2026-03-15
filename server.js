@@ -162,6 +162,7 @@ try { db.exec('ALTER TABLE updates ADD COLUMN wave_height REAL'); } catch (e) { 
 try { db.exec('ALTER TABLE updates ADD COLUMN sea_temp REAL'); } catch (e) { /* already exists */ }
 try { db.exec('ALTER TABLE updates ADD COLUMN pinned INTEGER DEFAULT 0'); } catch (e) { /* already exists */ }
 try { db.exec('ALTER TABLE updates ADD COLUMN media_url TEXT'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE positions ADD COLUMN calculated_speed REAL'); } catch (e) { /* already exists */ }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS forecast_cache (
@@ -551,13 +552,28 @@ function checkMilestones(lat, lon, timestamp) {
 
 // --- Save Position ---
 async function savePosition(lat, lon, speed, course, heading, timestamp) {
+  // Calculate speed from previous position
+  let calculatedSpeed = null;
+  const prev = getLatest.get();
+  if (prev) {
+    const distNm = haversineNm(prev.lat, prev.lon, lat, lon);
+    const hoursElapsed = (new Date(timestamp).getTime() - new Date(prev.timestamp).getTime()) / 3600000;
+    if (hoursElapsed > 0.01) { // at least ~36 seconds
+      calculatedSpeed = Math.round((distNm / hoursElapsed) * 10) / 10;
+    }
+  }
+
   const weather = await fetchWeather(lat, lon);
   insertPosition.run(
     lat, lon, speed, course, heading, timestamp,
     weather.wind_speed, weather.wind_dir, weather.wind_gust,
     weather.wave_height, weather.wave_period, weather.swell_height, weather.sea_temp
   );
-  console.log(`Position saved: ${lat.toFixed(4)}, ${lon.toFixed(4)} @ ${speed} kn | ${timestamp}`);
+  // Update calculated_speed on the just-inserted row
+  if (calculatedSpeed != null) {
+    db.prepare('UPDATE positions SET calculated_speed = ? WHERE id = (SELECT MAX(id) FROM positions)').run(calculatedSpeed);
+  }
+  console.log(`Position saved: ${lat.toFixed(4)}, ${lon.toFixed(4)} @ ${speed} kn (calc: ${calculatedSpeed != null ? calculatedSpeed + ' kn' : 'n/a'}) | ${timestamp}`);
   // Check for voyage milestones
   try { checkMilestones(lat, lon, timestamp); } catch (err) { console.error('Milestone check error:', err.message); }
   // Retroactively improve crew update locations near this position
