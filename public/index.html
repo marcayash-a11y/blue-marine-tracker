@@ -626,64 +626,208 @@ body {
 }
 .btn-theme:hover { background: var(--bg-card-hover); border-color: var(--cyan); }
 
+/* Stories Bar */
+.stories-bar {
+  display: flex;
+  gap: 12px;
+  padding: 10px 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 8px;
+}
+.stories-bar::-webkit-scrollbar { display: none; }
+.story-avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.story-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 2.5px solid var(--border);
+  transition: all 0.2s;
+}
+.story-avatar.recent .story-circle {
+  border-color: transparent;
+  background-image: linear-gradient(var(--bg-card), var(--bg-card)), linear-gradient(135deg, #06b6d4, #3b82f6, #8b5cf6);
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+}
+.story-name {
+  font-size: 0.62rem;
+  color: var(--text-dim);
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
 /* Updates Feed */
+.update-feed { overflow-y: auto; scrollbar-width: thin; }
+.new-updates-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
 .update-card {
-  background: var(--bg);
-  border-radius: 10px;
-  padding: 12px;
-  margin-bottom: 10px;
+  background: var(--bg-card);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
 }
 .update-card:last-child { margin-bottom: 0; }
-.update-header {
+.update-card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
-  font-size: 0.78rem;
+  padding: 10px 14px;
+  gap: 10px;
+}
+.update-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--cyan-dim), var(--blue));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: white;
+  flex-shrink: 0;
+}
+.update-header-text {
+  flex: 1;
+  min-width: 0;
 }
 .update-crew {
   font-weight: 600;
-  color: var(--cyan);
+  font-size: 0.82rem;
+  color: var(--text);
 }
-.update-time {
+.update-time-row {
+  font-size: 0.68rem;
   color: var(--text-muted);
   font-family: var(--mono);
-  font-size: 0.68rem;
 }
-.update-message {
-  font-size: 0.88rem;
-  color: var(--text);
-  line-height: 1.5;
+.update-admin-btns {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
-.update-photo {
+
+/* Full-width media area */
+.update-media-area {
+  position: relative;
   width: 100%;
-  border-radius: 8px;
-  margin-top: 8px;
+  background: #000;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.update-media-area img,
+.update-media-area video {
+  width: 100%;
+  display: block;
+  object-fit: cover;
   cursor: pointer;
 }
-video.update-photo {
-  max-height: 400px;
-  width: 100%;
-  object-fit: contain;
-  background: #000;
+.update-media-area img { aspect-ratio: 4/3; }
+.update-media-area video { aspect-ratio: 16/9; object-fit: contain; }
+
+/* Carousel */
+.update-carousel {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
-.update-location {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  margin-top: 4px;
+.update-carousel::-webkit-scrollbar { display: none; }
+.update-carousel .carousel-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  position: relative;
+}
+.carousel-dots {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 0 4px;
+}
+.carousel-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background 0.2s;
+}
+.carousel-dot.active { background: var(--cyan); }
+
+/* Carousel video play overlay */
+.carousel-slide .play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  background: rgba(0,0,0,0.2);
+  pointer-events: none;
+}
+
+/* Double-tap heart animation */
+.dbl-tap-heart {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  font-size: 80px;
+  pointer-events: none;
+  z-index: 10;
+  animation: heartPop 0.8s ease-out forwards;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.4));
+}
+@keyframes heartPop {
+  0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+  15% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+  30% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  70% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
+}
+
+/* Card body: reactions, caption, meta */
+.update-card-body {
+  padding: 8px 14px 12px;
 }
 .update-reactions {
   display: flex;
   gap: 6px;
-  margin-top: 8px;
   flex-wrap: wrap;
+  margin-bottom: 6px;
 }
 .react-btn {
   background: rgba(255,255,255,0.05);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 3px 8px;
-  font-size: 0.78rem;
+  padding: 4px 10px;
+  font-size: 0.82rem;
   cursor: pointer;
   transition: all 0.15s;
   color: var(--text-dim);
@@ -692,38 +836,24 @@ video.update-photo {
   gap: 3px;
 }
 .react-btn:hover { border-color: var(--cyan); background: rgba(6,182,212,0.1); }
-.react-btn .react-count { font-family: var(--mono); font-size: 0.68rem; }
-.update-gallery {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
+.react-btn .react-count { font-family: var(--mono); font-size: 0.7rem; }
+.update-message {
+  font-size: 0.88rem;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 4px;
 }
-.update-gallery img, .update-gallery video {
-  height: 120px;
-  border-radius: 8px;
-  cursor: pointer;
-  flex-shrink: 0;
-  object-fit: cover;
+.update-weather-stamp {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
-.gallery-video-wrap {
-  position: relative;
-  flex-shrink: 0;
-  cursor: pointer;
+.update-location {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
 }
-.gallery-video-wrap .play-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2rem;
-  background: rgba(0,0,0,0.25);
-  border-radius: 8px;
-  pointer-events: none;
-}
+
 .photo-previews {
   display: flex;
   gap: 8px;
@@ -808,29 +938,6 @@ video.update-photo {
   font-size: 0.72rem;
   color: var(--text-muted);
 }
-.update-weather-stamp {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  margin-top: 4px;
-}
-.update-card.pinned {
-  border: 1px solid var(--cyan);
-  background: rgba(6,182,212,0.05);
-}
-.pin-badge {
-  font-size: 0.7rem;
-  color: var(--cyan);
-  margin-left: 6px;
-}
-.pin-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  padding: 2px 4px;
-}
-.pin-btn:hover { color: var(--cyan); }
 .update-comments {
   margin-top: 8px;
   border-top: 1px solid var(--border);
@@ -1061,7 +1168,7 @@ video.update-photo {
   font-family: var(--mono) !important;
   font-size: 0.82rem !important;
 }
-.update-feed { max-height: 400px; overflow-y: auto; }
+.update-feed { max-height: 600px; overflow-y: auto; scrollbar-width: thin; }
 
 /* Admin action bar (mobile floating) */
 .admin-fab-bar {
@@ -1452,12 +1559,16 @@ video.update-photo {
   .log-time { font-size: 0.74rem; }
   .log-speed { font-size: 0.74rem; }
 
-  /* Update cards */
-  .update-card { padding: 14px; border-radius: 12px; }
+  /* Update cards — Instagram-style full-width */
+  .update-card { border-radius: 0; margin-bottom: 8px; }
+  .update-card-body { padding: 10px 16px 14px; }
   .update-message { font-size: 0.92rem; line-height: 1.55; }
-  .update-crew { font-size: 0.82rem; }
-  .update-time { font-size: 0.7rem; }
+  .update-crew { font-size: 0.85rem; }
+  .react-btn { padding: 6px 12px; font-size: 0.88rem; min-height: 36px; }
   .update-feed { max-height: none; }
+  .stories-bar { padding: 10px 8px; gap: 14px; }
+  .story-circle { width: 58px; height: 58px; font-size: 1.2rem; }
+  .comment-form input, .comment-form button { min-height: 38px; font-size: 0.82rem; }
 
   /* Modals: full-screen on mobile */
   .modal-backdrop {
@@ -1808,8 +1919,9 @@ video.update-photo {
       </div>
     </div>
 
-    <div class="sidebar-section">
-      <div class="sidebar-title">&#128247; Crew Updates</div>
+    <div class="sidebar-section" style="padding-bottom:0;">
+      <div class="sidebar-title">&#128247; Crew Updates<span id="newUpdatesDot" class="new-updates-dot" style="display:none;"></span></div>
+      <div class="stories-bar" id="storiesBar"></div>
       <div class="update-feed" id="updateFeed">
         <div style="color: var(--text-muted); font-size: 0.82rem;">No updates yet.</div>
       </div>
@@ -3273,68 +3385,90 @@ function renderDigestCard(d) {
   return `<div class="digest-card">
     <div class="digest-header">\uD83D\uDCCA Day ${d.day_number} at Sea \u2014 ${new Date(d.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
     <div class="digest-stats">
-      <span>Distance: <span class="digest-stat-value">${d.distance_nm} nm</span></span>
-      <span>Avg: <span class="digest-stat-value">${d.avg_speed} kn</span></span>
-      <span>Max: <span class="digest-stat-value">${d.max_speed} kn</span></span>
-      <span>Positions: <span class="digest-stat-value">${d.positions_count}</span></span>
-      ${d.updates_count > 0 ? '<span>Updates: <span class="digest-stat-value">' + d.updates_count + '</span></span>' : ''}
+      <span>\u26F5 <span class="digest-stat-value">${d.distance_nm} nm</span></span>
+      <span>Avg <span class="digest-stat-value">${d.avg_speed} kn</span></span>
+      <span>Max <span class="digest-stat-value">${d.max_speed} kn</span></span>
+      ${d.updates_count > 0 ? '<span>\uD83D\uDCF8 <span class="digest-stat-value">' + d.updates_count + '</span></span>' : ''}
     </div>
     ${d.weather_summary ? '<div class="digest-weather">\uD83C\uDF0A ' + d.weather_summary + '</div>' : ''}
   </div>`;
 }
 
-function renderMediaItem(m, isSingle) {
+function renderCarouselSlide(m) {
   if (m.type === 'video') {
-    if (isSingle) {
-      return `<video class="update-photo" src="${m.url}" controls playsinline webkit-playsinline preload="metadata"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video>`;
+    return `<div class="carousel-slide"><video src="${m.url}" controls playsinline webkit-playsinline preload="metadata"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video><div class="play-overlay" style="pointer-events:none;">\u25B6\uFE0F</div></div>`;
+  }
+  return `<div class="carousel-slide"><img src="${m.url}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')"></div>`;
+}
+
+function renderMediaArea(media, updateId) {
+  if (media.length === 0) return '';
+  const dblTap = ` ondblclick="doubleTapLike(event,${updateId})"`;
+  if (media.length === 1) {
+    const m = media[0];
+    if (m.type === 'video') {
+      return `<div class="update-media-area"${dblTap}><video src="${m.url}" controls playsinline webkit-playsinline preload="metadata"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video></div>`;
     }
-    return `<div class="gallery-video-wrap" onclick="openLightbox('${m.url}','video')"><img src="${m.thumbnail_url || ''}" alt="Video" loading="lazy" style="height:120px;border-radius:8px;${m.thumbnail_url ? '' : 'background:#222;width:160px;'}"><div class="play-overlay">\u25B6\uFE0F</div></div>`;
+    return `<div class="update-media-area"${dblTap}><img src="${m.url}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')"></div>`;
   }
-  if (isSingle) {
-    return `<img class="update-photo" src="${m.url}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')">`;
-  }
-  return `<img src="${m.url}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')">`;
+  // Multi: carousel with scroll-snap
+  const slides = media.map(m => renderCarouselSlide(m)).join('');
+  const dots = media.map((_, i) => `<div class="carousel-dot${i === 0 ? ' active' : ''}" data-idx="${i}"></div>`).join('');
+  return `<div class="update-media-area"${dblTap}><div class="update-carousel" data-uid="${updateId}">${slides}</div><div class="carousel-dots" data-uid="${updateId}">${dots}</div></div>`;
+}
+
+function getCrewColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  const hue = Math.abs(h) % 360;
+  return `hsl(${hue}, 60%, 45%)`;
 }
 
 function renderUpdateCard(u) {
   const emojis = ['\u2764\uFE0F', '\uD83D\uDC4F', '\uD83C\uDF0A', '\u26F5', '\uD83D\uDE4F'];
   const media = getMediaItems(u);
-  let photoHtml = '';
-  if (media.length === 1) {
-    photoHtml = renderMediaItem(media[0], true);
-  } else if (media.length > 1) {
-    photoHtml = '<div class="update-gallery">' + media.map(m => renderMediaItem(m, false)).join('') + '</div>';
-  }
-  const msgHtml = u.message ? `<div class="update-message">${u.message.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>` : '';
-  let locHtml = '';
-  if (u.estimated_lat != null && u.estimated_lon != null) {
-    const coast = nearestCoastName(u.estimated_lat, u.estimated_lon);
-    locHtml = `<div class="update-location">\u{1F4CD} ${coast ? 'Near ' + coast : 'Estimated position'}</div>`;
-  }
-  // Weather stamp
-  let wxHtml = '';
-  const wxParts = [];
-  if (u.wind_speed != null) wxParts.push(u.wind_speed.toFixed(0) + ' km/h winds');
-  if (u.wave_height != null) wxParts.push(u.wave_height.toFixed(1) + 'm waves');
-  if (u.sea_temp != null) wxParts.push(u.sea_temp.toFixed(0) + '\u00B0C');
-  if (wxParts.length > 0) wxHtml = `<div class="update-weather-stamp">\uD83C\uDF0A ${wxParts.join(' \u00B7 ')}</div>`;
+  const mediaHtml = renderMediaArea(media, u.id);
+  const crewName = u.crew_name.replace(/</g, '&lt;');
+  const initial = crewName.charAt(0).toUpperCase();
+  const color = getCrewColor(u.crew_name);
 
+  // Reactions
   const reactions = u.reactions || {};
   const reactHtml = '<div class="update-reactions">' + emojis.map(e => {
     const cnt = reactions[e] || 0;
     return `<button class="react-btn" onclick="sendReaction(${u.id},'${e}')">${e}${cnt > 0 ? ' <span class="react-count">' + cnt + '</span>' : ''}</button>`;
   }).join('') + '</div>';
 
-  // Pin badge and admin pin/delete buttons
-  const pinBadge = u.pinned ? '<span class="pin-badge">\uD83D\uDCCC Pinned</span>' : '';
-  const pinBtn = adminUnlocked ? `<button class="pin-btn" onclick="togglePin(${u.id})">${u.pinned ? 'Unpin' : '\uD83D\uDCCC Pin'}</button>` : '';
-  const deleteUpdateBtn = adminUnlocked ? `<button class="update-delete-btn" onclick="deleteUpdate(${u.id})" title="Delete update">\uD83D\uDDD1\uFE0F</button>` : '';
+  // Caption
+  const msgHtml = u.message ? `<div class="update-message"><span style="font-weight:600;color:var(--cyan);margin-right:4px;">${crewName}</span>${u.message.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>` : '';
+
+  // Weather stamp
+  let wxHtml = '';
+  const wxParts = [];
+  if (u.wind_speed != null) wxParts.push(u.wind_speed.toFixed(0) + ' km/h');
+  if (u.wave_height != null) wxParts.push(u.wave_height.toFixed(1) + 'm waves');
+  if (u.sea_temp != null) wxParts.push(u.sea_temp.toFixed(0) + '\u00B0C');
+  if (wxParts.length > 0) wxHtml = `<div class="update-weather-stamp">\uD83C\uDF0A ${wxParts.join(' \u00B7 ')}</div>`;
+
+  // Location
+  let locHtml = '';
+  if (u.estimated_lat != null && u.estimated_lon != null) {
+    const coast = nearestCoastName(u.estimated_lat, u.estimated_lon);
+    locHtml = `<div class="update-location">\u{1F4CD} ${coast ? 'Near ' + coast : 'Estimated position'}</div>`;
+  }
+
+  // Pin badge and admin buttons
+  const pinBadge = u.pinned ? ' <span class="pin-badge">\uD83D\uDCCC Pinned</span>' : '';
+  let adminHtml = '';
+  if (adminUnlocked) {
+    adminHtml = `<div class="update-admin-btns"><button class="pin-btn" onclick="togglePin(${u.id})">${u.pinned ? 'Unpin' : '\uD83D\uDCCC'}</button><button class="pin-btn" onclick="deleteUpdate(${u.id})" title="Delete">\uD83D\uDDD1\uFE0F</button></div>`;
+  }
 
   // Comments
   const comments = u.comments || [];
   const commentCount = comments.length;
   let commentsHtml = '<div class="update-comments">';
-  commentsHtml += `<button class="toggle-comments" onclick="toggleComments(${u.id})">💬 ${commentCount > 0 ? commentCount + ' comment' + (commentCount !== 1 ? 's' : '') : 'Add comment'}</button>`;
+  commentsHtml += `<button class="toggle-comments" onclick="toggleComments(${u.id})">${commentCount > 0 ? 'View all ' + commentCount + ' comment' + (commentCount !== 1 ? 's' : '') : '\uD83D\uDCAC Add comment'}</button>`;
   commentsHtml += `<div id="comments-${u.id}" style="display:none;">`;
   if (commentCount > 0) {
     commentsHtml += comments.map(c => {
@@ -3351,26 +3485,85 @@ function renderUpdateCard(u) {
   commentsHtml += '</div></div>';
 
   const pinnedClass = u.pinned ? ' pinned' : '';
-  return `<div class="update-card${pinnedClass}">
-    <div class="update-header">
-      <span class="update-crew">${u.crew_name.replace(/</g,'&lt;')}${pinBadge}</span>
-      <span class="update-time">${deleteUpdateBtn}${pinBtn}${relativeTime(u.timestamp)}</span>
+  return `<div class="update-card${pinnedClass}" id="update-${u.id}">
+    <div class="update-card-header">
+      <div class="update-avatar" style="background:${color};">${initial}</div>
+      <div class="update-header-text">
+        <div class="update-crew">${crewName}${pinBadge}</div>
+        <div class="update-time-row">${relativeTime(u.timestamp)}</div>
+      </div>
+      ${adminHtml}
     </div>
-    ${msgHtml}
-    ${locHtml}
-    ${wxHtml}
-    ${photoHtml}
-    ${reactHtml}
-    ${commentsHtml}
+    ${mediaHtml}
+    <div class="update-card-body">
+      ${reactHtml}
+      ${msgHtml}
+      ${wxHtml}
+      ${locHtml}
+      ${commentsHtml}
+    </div>
   </div>`;
+}
+
+function renderStoriesBar() {
+  const bar = document.getElementById('storiesBar');
+  if (updatesData.length === 0) { bar.innerHTML = ''; return; }
+  // Collect unique crew members with their latest timestamp
+  const crewMap = {};
+  for (const u of updatesData) {
+    const name = u.crew_name;
+    if (!crewMap[name] || new Date(u.timestamp).getTime() > new Date(crewMap[name].timestamp).getTime()) {
+      crewMap[name] = u;
+    }
+  }
+  const now = Date.now();
+  const day = 24 * 3600000;
+  bar.innerHTML = Object.entries(crewMap).map(([name, u]) => {
+    const recent = (now - new Date(u.timestamp).getTime()) < day;
+    const initial = name.charAt(0).toUpperCase();
+    const color = getCrewColor(name);
+    return `<div class="story-avatar${recent ? ' recent' : ''}" onclick="scrollToUpdate(${u.id})">
+      <div class="story-circle" style="${recent ? '' : 'border-color:' + color + ';'}">${initial}</div>
+      <div class="story-name">${name.replace(/</g,'&lt;')}</div>
+    </div>`;
+  }).join('');
+}
+
+function scrollToUpdate(id) {
+  const el = document.getElementById('update-' + id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function checkNewUpdatesBadge() {
+  const dot = document.getElementById('newUpdatesDot');
+  if (!dot || updatesData.length === 0) return;
+  const lastViewed = parseInt(localStorage.getItem('lastViewedUpdate') || '0', 10);
+  const newest = Math.max(...updatesData.map(u => new Date(u.timestamp).getTime()));
+  if (newest > lastViewed) {
+    dot.style.display = 'inline-block';
+  } else {
+    dot.style.display = 'none';
+  }
+}
+
+function markUpdatesViewed() {
+  if (updatesData.length === 0) return;
+  const newest = Math.max(...updatesData.map(u => new Date(u.timestamp).getTime()));
+  localStorage.setItem('lastViewedUpdate', newest.toString());
+  const dot = document.getElementById('newUpdatesDot');
+  if (dot) dot.style.display = 'none';
 }
 
 function renderUpdates() {
   const el = document.getElementById('updateFeed');
   if (updatesData.length === 0 && digestsData.length === 0) {
-    el.innerHTML = '<div style="color: var(--text-muted); font-size: 0.82rem;">No updates yet.</div>';
+    el.innerHTML = '<div style="color: var(--text-muted); font-size: 0.82rem; padding:12px;">No updates yet.</div>';
+    document.getElementById('storiesBar').innerHTML = '';
     return;
   }
+
+  // Stories bar
+  renderStoriesBar();
 
   // Interleave updates and digests by timestamp
   const items = [];
@@ -3384,8 +3577,33 @@ function renderUpdates() {
     return renderUpdateCard(item.data);
   }).join('');
 
+  // Wire up carousel scroll observers
+  el.querySelectorAll('.update-carousel').forEach(carousel => {
+    const uid = carousel.dataset.uid;
+    const dots = el.querySelector('.carousel-dots[data-uid="' + uid + '"]');
+    if (!dots) return;
+    const slides = carousel.querySelectorAll('.carousel-slide');
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const idx = Array.from(slides).indexOf(entry.target);
+          dots.querySelectorAll('.carousel-dot').forEach((d, i) => d.classList.toggle('active', i === idx));
+        }
+      });
+    }, { root: carousel, threshold: 0.5 });
+    slides.forEach(s => observer.observe(s));
+  });
+
+  // New updates badge
+  checkNewUpdatesBadge();
+
   renderCrewUpdateMarkers();
 }
+
+// Mark as viewed when user scrolls the feed
+document.getElementById('updateFeed').addEventListener('scroll', function() {
+  markUpdatesViewed();
+}, { passive: true, once: true });
 
 function renderCrewUpdateMarkers() {
   crewUpdateMarkers.forEach(m => map.removeLayer(m));
@@ -3418,6 +3636,24 @@ function renderCrewUpdateMarkers() {
       .addTo(map);
     crewUpdateMarkers.push(marker);
   }
+}
+
+// --- Double-tap to like ---
+let lastTapTime = 0;
+function doubleTapLike(event, updateId) {
+  const now = Date.now();
+  if (now - lastTapTime < 350) {
+    // Double tap detected
+    event.preventDefault();
+    const area = event.currentTarget;
+    const heart = document.createElement('div');
+    heart.className = 'dbl-tap-heart';
+    heart.textContent = '\u2764\uFE0F';
+    area.appendChild(heart);
+    setTimeout(() => heart.remove(), 900);
+    sendReaction(updateId, '\u2764\uFE0F');
+  }
+  lastTapTime = now;
 }
 
 function openLightbox(url, type) {
