@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bluemarine-v1';
+const CACHE_NAME = 'bluemarine-v2';
 const SHELL_URLS = [
   '/',
   '/manifest.json',
@@ -51,6 +51,55 @@ self.addEventListener('fetch', (e) => {
         return res;
       }).catch(() => cached);
       return cached || fetchPromise;
+    })
+  );
+});
+
+// --- Push Notifications ---
+self.addEventListener('push', (e) => {
+  if (!e.data) return;
+  try {
+    const data = e.data.json();
+    const options = {
+      body: data.body || '',
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⛵</text></svg>',
+      badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⛵</text></svg>',
+      tag: data.type || 'general',
+      renotify: true,
+      data: { url: self.registration.scope }
+    };
+    e.waitUntil(self.registration.showNotification(data.title || 'BLUE MARINE', options));
+  } catch (err) {
+    // Fallback for non-JSON push
+    e.waitUntil(self.registration.showNotification('BLUE MARINE', { body: e.data.text() }));
+  }
+});
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Focus existing tab if open
+      for (const client of windowClients) {
+        if (client.url.includes(self.registration.scope) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Otherwise open new tab
+      return clients.openWindow(url);
+    })
+  );
+});
+
+self.addEventListener('pushsubscriptionchange', (e) => {
+  e.waitUntil(
+    self.registration.pushManager.subscribe(e.oldSubscription.options).then((sub) => {
+      return fetch('/api/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sub.toJSON())
+      });
     })
   );
 });

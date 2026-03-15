@@ -154,6 +154,57 @@ body {
   white-space: nowrap;
 }
 .btn-share:hover { background: var(--bg-card-hover); border-color: var(--cyan); color: var(--cyan); }
+.btn-notify {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  padding: 0 12px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 5px;
+  font-family: var(--sans);
+  transition: all 0.2s;
+  white-space: nowrap;
+  position: relative;
+}
+.btn-notify:hover { background: var(--bg-card-hover); border-color: var(--cyan); color: var(--cyan); }
+.btn-notify.active { border-color: var(--green); color: var(--green); }
+.btn-notify .notify-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  display: none;
+}
+.btn-notify.active .notify-dot { display: inline-block; }
+.notify-tooltip {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--cyan);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.78rem;
+  color: var(--text);
+  width: 220px;
+  z-index: 2000;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  line-height: 1.4;
+}
+.notify-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  right: 16px;
+  width: 10px;
+  height: 10px;
+  background: var(--bg-card);
+  border-left: 1px solid var(--cyan);
+  border-top: 1px solid var(--cyan);
+  transform: rotate(45deg);
+}
 
 /* Toast */
 .toast {
@@ -610,6 +661,12 @@ body {
   margin-top: 8px;
   cursor: pointer;
 }
+video.update-photo {
+  max-height: 400px;
+  width: 100%;
+  object-fit: contain;
+  background: #000;
+}
 .update-location {
   font-size: 0.72rem;
   color: var(--text-muted);
@@ -644,12 +701,28 @@ body {
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
-.update-gallery img {
+.update-gallery img, .update-gallery video {
   height: 120px;
   border-radius: 8px;
   cursor: pointer;
   flex-shrink: 0;
   object-fit: cover;
+}
+.gallery-video-wrap {
+  position: relative;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.gallery-video-wrap .play-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  background: rgba(0,0,0,0.25);
+  border-radius: 8px;
+  pointer-events: none;
 }
 .photo-previews {
   display: flex;
@@ -662,11 +735,44 @@ body {
   width: 70px;
   height: 70px;
 }
-.photo-previews .preview-thumb img {
+.photo-previews .preview-thumb img,
+.photo-previews .preview-thumb video {
   width: 70px;
   height: 70px;
   object-fit: cover;
   border-radius: 8px;
+}
+.preview-thumb .file-size {
+  display: block;
+  text-align: center;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  margin-top: 2px;
+}
+.upload-progress-wrap {
+  margin-top: 8px;
+  display: none;
+}
+.upload-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.upload-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--cyan);
+  border-radius: 3px;
+  transition: width 0.15s;
+}
+.upload-progress-text {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  margin-top: 2px;
 }
 .photo-previews .preview-thumb .remove-photo {
   position: absolute;
@@ -1098,7 +1204,7 @@ body {
   cursor: pointer;
 }
 .photo-lightbox.hidden { display: none; }
-.photo-lightbox img {
+.photo-lightbox img, .photo-lightbox video {
   max-width: 95vw;
   max-height: 95vh;
   border-radius: 8px;
@@ -1305,7 +1411,7 @@ body {
     font-size: 1.1rem;
     min-width: 40px;
   }
-  .btn-share {
+  .btn-share, .btn-notify {
     height: 40px;
     font-size: 0.78rem;
     padding: 0 12px;
@@ -1476,8 +1582,8 @@ body {
 @media (max-width: 380px) {
   .vessel-name { font-size: 1.05rem; }
   .header-right { gap: 6px; }
-  .btn-share span { display: none; }
-  .btn-share { padding: 0 10px; }
+  .btn-share span, .btn-notify span#notifyLabel { display: none; }
+  .btn-share, .btn-notify { padding: 0 10px; }
   .metric-value { font-size: 0.88rem; }
   .metrics-bar { gap: 4px; }
   .sidebar-section { padding: 14px 12px; }
@@ -1499,6 +1605,7 @@ body {
     <span id="signalText">Connecting...</span>
   </div>
   <div class="header-right">
+    <button class="btn-notify" id="btnNotify" onclick="toggleNotifications()" title="Push notifications">&#128276; <span id="notifyLabel">Notify</span><span class="notify-dot"></span></button>
     <button class="btn-share" onclick="shareLink()" title="Share tracker link">&#128228; <span>Share</span></button>
     <button class="btn-theme" onclick="toggleTheme()" id="themeBtn" title="Toggle light/dark mode">&#127769;</button>
     <!-- Admin: locked state -->
@@ -1796,18 +1903,23 @@ body {
       <textarea id="updateMessage" placeholder="What's happening on board?"></textarea>
     </div>
     <div class="form-group">
-      <button class="btn-choose-photo" id="btnChoosePhoto" onclick="document.getElementById('updatePhotoInput').click()">&#128247; Add Photos (up to 5)</button>
-      <input type="file" id="updatePhotoInput" accept="image/*" multiple style="display:none">
+      <button class="btn-choose-photo" id="btnChoosePhoto" onclick="document.getElementById('updatePhotoInput').click()">&#128247; Add Photos/Videos (up to 5)</button>
+      <input type="file" id="updatePhotoInput" accept="image/*,video/*" multiple style="display:none">
       <div class="photo-previews" id="photoPreviews"></div>
+      <div class="upload-progress-wrap" id="uploadProgressWrap">
+        <div class="upload-progress-bar"><div class="upload-progress-fill" id="uploadProgressFill"></div></div>
+        <div class="upload-progress-text" id="uploadProgressText">Uploading...</div>
+      </div>
     </div>
     <button class="btn-post-update" id="btnPostUpdate" onclick="submitUpdate()">Post Update</button>
     <div class="modal-msg" id="updateMsg"></div>
   </div>
 </div>
 
-<!-- Photo Lightbox -->
-<div class="photo-lightbox hidden" id="photoLightbox" onclick="this.classList.add('hidden')">
-  <img id="lightboxImg" src="">
+<!-- Photo/Video Lightbox -->
+<div class="photo-lightbox hidden" id="photoLightbox" onclick="closeLightbox(event)">
+  <img id="lightboxImg" src="" style="display:none">
+  <video id="lightboxVideo" src="" controls playsinline webkit-playsinline style="display:none"></video>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1833,8 +1945,127 @@ function toggleTheme() {
 applyTheme(getThemePref());
 
 // --- Service Worker ---
+let swRegistration = null;
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register('/sw.js').then(reg => {
+    swRegistration = reg;
+    initNotifyButton();
+  }).catch(() => {});
+}
+
+// --- Push Notifications ---
+let pushSubscription = null;
+
+async function initNotifyButton() {
+  const btn = document.getElementById('btnNotify');
+  if (!('PushManager' in window) || !swRegistration) {
+    btn.style.display = 'none';
+    return;
+  }
+  // Check existing subscription
+  try {
+    pushSubscription = await swRegistration.pushManager.getSubscription();
+    updateNotifyButton();
+  } catch (e) {}
+  // Show first-visit tooltip
+  if (!localStorage.getItem('notifyTooltipShown') && !pushSubscription) {
+    showNotifyTooltip();
+  }
+}
+
+function updateNotifyButton() {
+  const btn = document.getElementById('btnNotify');
+  const label = document.getElementById('notifyLabel');
+  if (pushSubscription) {
+    btn.classList.add('active');
+    label.textContent = 'On';
+    localStorage.setItem('pushEnabled', '1');
+  } else {
+    btn.classList.remove('active');
+    label.textContent = 'Notify';
+    localStorage.removeItem('pushEnabled');
+  }
+}
+
+function showNotifyTooltip() {
+  const btn = document.getElementById('btnNotify');
+  const tip = document.createElement('div');
+  tip.className = 'notify-tooltip';
+  tip.textContent = 'Turn on notifications to know when the crew posts updates!';
+  btn.style.position = 'relative';
+  btn.appendChild(tip);
+  localStorage.setItem('notifyTooltipShown', '1');
+  setTimeout(() => { tip.remove(); }, 6000);
+  tip.addEventListener('click', (e) => { e.stopPropagation(); tip.remove(); });
+}
+
+async function toggleNotifications() {
+  // Remove tooltip if shown
+  const tip = document.querySelector('.notify-tooltip');
+  if (tip) tip.remove();
+
+  if (!swRegistration) return;
+
+  if (pushSubscription) {
+    // Unsubscribe
+    try {
+      const endpoint = pushSubscription.endpoint;
+      await pushSubscription.unsubscribe();
+      pushSubscription = null;
+      updateNotifyButton();
+      await fetch('/api/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint })
+      });
+      showToast('Notifications turned off');
+    } catch (e) {
+      console.error('Unsubscribe error:', e);
+    }
+    return;
+  }
+
+  // Request permission
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    showToast('Notification permission denied');
+    return;
+  }
+
+  // Get VAPID key and subscribe
+  try {
+    const vapidRes = await fetch('/api/vapid-public-key');
+    const { publicKey } = await vapidRes.json();
+    const applicationServerKey = urlBase64ToUint8Array(publicKey);
+
+    pushSubscription = await swRegistration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey
+    });
+
+    // Send subscription to server
+    const subJson = pushSubscription.toJSON();
+    await fetch('/api/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: subJson.endpoint, keys: subJson.keys })
+    });
+
+    updateNotifyButton();
+    showToast('Notifications turned on!');
+  } catch (err) {
+    console.error('Subscribe error:', err);
+    showToast('Could not enable notifications');
+  }
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
 }
 
 // --- CET Timezone ---
@@ -1879,13 +2110,14 @@ let map, boatMarker, trackLine, routeLine, departureMarker, destMarker;
 
 // --- Voyage Phases ---
 const PHASES = [
-  { name: 'Phase 3: Port Said → Crete',       nm: 440, from: {lat:31.26, lon:32.30}, to: {lat:35.20, lon:24.50} },
-  { name: 'Phase 4: Crete → Malta',            nm: 495, from: {lat:35.20, lon:24.50}, to: {lat:35.90, lon:14.50} },
-  { name: 'Phase 5: Malta → Sicily',            nm: 130, from: {lat:35.90, lon:14.50}, to: {lat:37.50, lon:15.10} },
-  { name: 'Phase 6: Sicily → Sardinia',         nm: 190, from: {lat:37.50, lon:15.10}, to: {lat:39.20, lon: 9.12} },
-  { name: 'Phase 7: Sardinia → Formentera',     nm: 345, from: {lat:39.20, lon: 9.12}, to: {lat:38.70, lon: 1.42} },
-  { name: 'Phase 8: Formentera → Almería',      nm: 215, from: {lat:38.70, lon: 1.42}, to: {lat:36.84, lon:-2.47} },
-  { name: 'Phase 9: Almería → Benalmádena',     nm: 110, from: {lat:36.84, lon:-2.47}, to: {lat:36.60, lon:-4.52} },
+  { name: 'Phase 3: Port Said \u2192 Limassol',      nm: 230, from: {lat:31.27, lon:32.30}, to: {lat:34.67, lon:33.04} },
+  { name: 'Phase 4: Limassol \u2192 Crete',           nm: 480, from: {lat:34.67, lon:33.04}, to: {lat:35.34, lon:25.14} },
+  { name: 'Phase 5: Crete \u2192 Malta',              nm: 495, from: {lat:35.34, lon:25.14}, to: {lat:35.90, lon:14.51} },
+  { name: 'Phase 6: Malta \u2192 Sicily',             nm: 130, from: {lat:35.90, lon:14.51}, to: {lat:37.08, lon:15.29} },
+  { name: 'Phase 7: Sicily \u2192 Sardinia',          nm: 190, from: {lat:37.08, lon:15.29}, to: {lat:39.22, lon: 9.12} },
+  { name: 'Phase 8: Sardinia \u2192 Formentera',      nm: 345, from: {lat:39.22, lon: 9.12}, to: {lat:38.71, lon: 1.44} },
+  { name: 'Phase 9: Formentera \u2192 Almer\u00eda',  nm: 215, from: {lat:38.71, lon: 1.44}, to: {lat:36.84, lon:-2.46} },
+  { name: 'Phase 10: Almer\u00eda \u2192 Benalm\u00e1dena', nm: 110, from: {lat:36.84, lon:-2.46}, to: {lat:36.60, lon:-4.52} },
 ];
 
 function getCurrentPhase(lat, lon) {
@@ -1986,6 +2218,15 @@ function drawRoute(waypoints) {
       }).bindTooltip(w.name, { permanent: false, direction: 'top', className: '' }).addTo(map);
     }
   });
+
+  // Limassol weather stop marker
+  const limassolWp = waypoints.find(w => w.name === 'Limassol');
+  if (limassolWp) {
+    const anchorIcon = L.divIcon({ html: '<div style="font-size:22px; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));">\u2693</div>', className: '', iconSize: [26, 26], iconAnchor: [13, 13] });
+    L.marker([limassolWp.lat, limassolWp.lon], { icon: anchorIcon, zIndexOffset: 600 })
+      .bindPopup('<b>\u2693 Limassol, Cyprus</b><br>Weather stop')
+      .addTo(map);
+  }
 }
 
 function updateBoatMarker(lat, lon, course) {
@@ -2682,7 +2923,7 @@ async function deleteUpdate(id) {
 let updatesData = [];
 let digestsData = [];
 let milestonesData = [];
-let selectedPhotos = [];
+let selectedFiles = []; // Array of {file, previewUrl, type, size}
 let crewUpdateMarkers = [];
 
 function openUpdateModal() {
@@ -2696,62 +2937,96 @@ function openUpdateModal() {
 
 function closeUpdateModal() {
   document.getElementById('updateModal').classList.add('hidden');
-  selectedPhotos = [];
+  // Revoke object URLs
+  for (const f of selectedFiles) { if (f.previewUrl) URL.revokeObjectURL(f.previewUrl); }
+  selectedFiles = [];
   document.getElementById('photoPreviews').innerHTML = '';
   document.getElementById('btnChoosePhoto').classList.remove('has-photo');
-  document.getElementById('btnChoosePhoto').innerHTML = '&#128247; Add Photos (up to 5)';
+  document.getElementById('btnChoosePhoto').innerHTML = '&#128247; Add Photos/Videos (up to 5)';
+  document.getElementById('uploadProgressWrap').style.display = 'none';
 }
 
 document.getElementById('updateModal').addEventListener('click', (e) => {
   if (e.target === document.getElementById('updateModal')) closeUpdateModal();
 });
 
-// Photo file input handler (multi-photo)
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+// File input handler (photos + videos)
 document.getElementById('updatePhotoInput').addEventListener('change', (e) => {
   const files = Array.from(e.target.files);
   if (!files.length) return;
-  const remaining = 5 - selectedPhotos.length;
+  const remaining = 5 - selectedFiles.length;
   const toAdd = files.slice(0, remaining);
   for (const file of toAdd) {
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      selectedPhotos.push(ev.target.result);
-      renderPhotoPreviewsModal();
-    };
-    reader.readAsDataURL(file);
+    if (file.size > 50 * 1024 * 1024) {
+      document.getElementById('updateMsg').className = 'modal-msg error';
+      document.getElementById('updateMsg').textContent = file.name + ' exceeds 50MB limit';
+      continue;
+    }
+    const isVideo = file.type.startsWith('video/');
+    const previewUrl = URL.createObjectURL(file);
+    selectedFiles.push({ file, previewUrl, type: isVideo ? 'video' : 'photo', size: file.size });
   }
+  // Check total size
+  const totalSize = selectedFiles.reduce((s, f) => s + f.size, 0);
+  if (totalSize > 100 * 1024 * 1024) {
+    document.getElementById('updateMsg').className = 'modal-msg error';
+    document.getElementById('updateMsg').textContent = 'Total size exceeds 100MB limit';
+  }
+  renderFilePreviewsModal();
   e.target.value = '';
 });
 
-function renderPhotoPreviewsModal() {
+function renderFilePreviewsModal() {
   const container = document.getElementById('photoPreviews');
-  container.innerHTML = selectedPhotos.map((src, i) =>
-    `<div class="preview-thumb"><img src="${src}"><button class="remove-photo" onclick="removePhoto(${i})">&times;</button></div>`
-  ).join('');
+  container.innerHTML = selectedFiles.map((f, i) => {
+    const media = f.type === 'video'
+      ? `<video src="${f.previewUrl}" muted></video>`
+      : `<img src="${f.previewUrl}">`;
+    return `<div class="preview-thumb">${media}<button class="remove-photo" onclick="removeFile(${i})">&times;</button><span class="file-size">${formatFileSize(f.size)}</span></div>`;
+  }).join('');
   const btn = document.getElementById('btnChoosePhoto');
-  if (selectedPhotos.length > 0) {
+  if (selectedFiles.length > 0) {
+    const totalSize = selectedFiles.reduce((s, f) => s + f.size, 0);
     btn.classList.add('has-photo');
-    btn.innerHTML = '&#9989; ' + selectedPhotos.length + ' photo' + (selectedPhotos.length > 1 ? 's' : '') + (selectedPhotos.length < 5 ? ' (+ add more)' : '');
+    btn.innerHTML = '&#9989; ' + selectedFiles.length + ' file' + (selectedFiles.length > 1 ? 's' : '') + ' (' + formatFileSize(totalSize) + ')' + (selectedFiles.length < 5 ? ' + add more' : '');
   } else {
     btn.classList.remove('has-photo');
-    btn.innerHTML = '&#128247; Add Photos (up to 5)';
+    btn.innerHTML = '&#128247; Add Photos/Videos (up to 5)';
   }
 }
 
-function removePhoto(idx) {
-  selectedPhotos.splice(idx, 1);
-  renderPhotoPreviewsModal();
+function removeFile(idx) {
+  if (selectedFiles[idx].previewUrl) URL.revokeObjectURL(selectedFiles[idx].previewUrl);
+  selectedFiles.splice(idx, 1);
+  renderFilePreviewsModal();
 }
 
-async function submitUpdate() {
+function submitUpdate() {
   const crewName = document.getElementById('updateCrewName').value.trim() || 'Crew';
   const message = document.getElementById('updateMessage').value.trim();
   const msg = document.getElementById('updateMsg');
   const btn = document.getElementById('btnPostUpdate');
+  const progressWrap = document.getElementById('uploadProgressWrap');
+  const progressFill = document.getElementById('uploadProgressFill');
+  const progressText = document.getElementById('uploadProgressText');
 
-  if (!message && selectedPhotos.length === 0) {
+  if (!message && selectedFiles.length === 0) {
     msg.className = 'modal-msg error';
-    msg.textContent = 'Write a message or choose a photo';
+    msg.textContent = 'Write a message or choose a photo/video';
+    return;
+  }
+
+  // Check total size
+  const totalSize = selectedFiles.reduce((s, f) => s + f.size, 0);
+  if (totalSize > 100 * 1024 * 1024) {
+    msg.className = 'modal-msg error';
+    msg.textContent = 'Total size exceeds 100MB limit';
     return;
   }
 
@@ -2759,33 +3034,62 @@ async function submitUpdate() {
   btn.disabled = true;
   btn.textContent = 'Posting...';
 
-  try {
-    const body = { crew_name: crewName, message: message || null };
-    if (selectedPhotos.length === 1) body.photo = selectedPhotos[0];
-    else if (selectedPhotos.length > 1) body.photos = selectedPhotos;
+  const formData = new FormData();
+  formData.append('crew_name', crewName);
+  if (message) formData.append('message', message);
+  for (const f of selectedFiles) {
+    formData.append('files', f.file);
+  }
 
-    const res = await fetch('/api/updates', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Admin-Pin': savedPin },
-      body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if (res.ok) {
-      msg.className = 'modal-msg success';
-      msg.textContent = 'Posted!';
-      document.getElementById('updateMessage').value = '';
-      selectedPhotos = [];
-      setTimeout(() => { closeUpdateModal(); fetchUpdates(); }, 800);
-    } else {
-      msg.className = 'modal-msg error';
-      msg.textContent = data.error || 'Error posting update';
+  // Show progress bar if there are files
+  if (selectedFiles.length > 0) {
+    progressWrap.style.display = 'block';
+    progressFill.style.width = '0%';
+    progressText.textContent = 'Uploading...';
+  }
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/updates');
+  xhr.setRequestHeader('X-Admin-Pin', savedPin);
+
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      progressFill.style.width = pct + '%';
+      progressText.textContent = 'Uploading... ' + pct + '% (' + formatFileSize(e.loaded) + ' / ' + formatFileSize(e.total) + ')';
     }
-  } catch (err) {
+  };
+
+  xhr.onload = () => {
+    try {
+      const data = JSON.parse(xhr.responseText);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        msg.className = 'modal-msg success';
+        msg.textContent = 'Posted!';
+        document.getElementById('updateMessage').value = '';
+        progressText.textContent = 'Done!';
+        setTimeout(() => { closeUpdateModal(); fetchUpdates(); }, 800);
+      } else {
+        msg.className = 'modal-msg error';
+        msg.textContent = data.error || 'Error posting update';
+      }
+    } catch (err) {
+      msg.className = 'modal-msg error';
+      msg.textContent = 'Error parsing response';
+    }
+    btn.disabled = false;
+    btn.textContent = 'Post Update';
+  };
+
+  xhr.onerror = () => {
     msg.className = 'modal-msg error';
     msg.textContent = 'Network error';
-  }
-  btn.disabled = false;
-  btn.textContent = 'Post Update';
+    btn.disabled = false;
+    btn.textContent = 'Post Update';
+    progressWrap.style.display = 'none';
+  };
+
+  xhr.send(formData);
 }
 
 function relativeTime(ts) {
@@ -2803,6 +3107,7 @@ function nearestCoastName(lat, lon) {
   const coasts = [
     { name: 'Ismailia', lat: 30.60, lon: 32.27 },
     { name: 'Port Said', lat: 31.27, lon: 32.30 },
+    { name: 'Limassol', lat: 34.67, lon: 33.04 },
     { name: 'Crete', lat: 35.34, lon: 25.14 },
     { name: 'Malta', lat: 35.90, lon: 14.51 },
     { name: 'Sicily', lat: 37.08, lon: 15.29 },
@@ -2819,12 +3124,25 @@ function nearestCoastName(lat, lon) {
   return minDist < 100 ? closest : null;
 }
 
-function getPhotoUrls(u) {
-  if (!u.photo_url) return [];
-  if (u.photo_url.startsWith('[')) {
-    try { return JSON.parse(u.photo_url); } catch (e) { return [u.photo_url]; }
+function getMediaItems(u) {
+  // New format: media_url is JSON array of {url, type, thumbnail_url}
+  if (u.media_url) {
+    try { return JSON.parse(u.media_url); } catch (e) {}
   }
-  return [u.photo_url];
+  // Legacy format: photo_url is a string or JSON array of strings
+  if (!u.photo_url) return [];
+  let urls;
+  if (u.photo_url.startsWith('[')) {
+    try { urls = JSON.parse(u.photo_url); } catch (e) { urls = [u.photo_url]; }
+  } else {
+    urls = [u.photo_url];
+  }
+  return urls.map(url => ({ url, type: 'photo', thumbnail_url: null }));
+}
+
+// Keep for backward compat in map popups
+function getPhotoUrls(u) {
+  return getMediaItems(u).filter(m => m.type === 'photo').map(m => m.url);
 }
 
 function renderDigestCard(d) {
@@ -2841,14 +3159,27 @@ function renderDigestCard(d) {
   </div>`;
 }
 
+function renderMediaItem(m, isSingle) {
+  if (m.type === 'video') {
+    if (isSingle) {
+      return `<video class="update-photo" src="${m.url}" controls playsinline webkit-playsinline preload="metadata"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video>`;
+    }
+    return `<div class="gallery-video-wrap" onclick="openLightbox('${m.url}','video')"><img src="${m.thumbnail_url || ''}" alt="Video" loading="lazy" style="height:120px;border-radius:8px;${m.thumbnail_url ? '' : 'background:#222;width:160px;'}"><div class="play-overlay">\u25B6\uFE0F</div></div>`;
+  }
+  if (isSingle) {
+    return `<img class="update-photo" src="${m.url}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')">`;
+  }
+  return `<img src="${m.url}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')">`;
+}
+
 function renderUpdateCard(u) {
   const emojis = ['\u2764\uFE0F', '\uD83D\uDC4F', '\uD83C\uDF0A', '\u26F5', '\uD83D\uDE4F'];
-  const photos = getPhotoUrls(u);
+  const media = getMediaItems(u);
   let photoHtml = '';
-  if (photos.length === 1) {
-    photoHtml = `<img class="update-photo" src="${photos[0]}" alt="Photo" loading="lazy" onclick="openLightbox('${photos[0]}')">`;
-  } else if (photos.length > 1) {
-    photoHtml = '<div class="update-gallery">' + photos.map(p => `<img src="${p}" alt="Photo" loading="lazy" onclick="openLightbox('${p}')">`).join('') + '</div>';
+  if (media.length === 1) {
+    photoHtml = renderMediaItem(media[0], true);
+  } else if (media.length > 1) {
+    photoHtml = '<div class="update-gallery">' + media.map(m => renderMediaItem(m, false)).join('') + '</div>';
   }
   const msgHtml = u.message ? `<div class="update-message">${u.message.replace(/</g,'&lt;').replace(/\n/g,'<br>')}</div>` : '';
   let locHtml = '';
@@ -2948,9 +3279,14 @@ function renderCrewUpdateMarkers() {
     const escapedMsg = u.message ? u.message.replace(/</g, '&lt;').replace(/\n/g, '<br>') : '';
     let popupContent = `<b>${escapedName}</b> <small>${relativeTime(u.timestamp)}</small>`;
     if (escapedMsg) popupContent += `<br>${escapedMsg}`;
-    const photos = getPhotoUrls(u);
-    if (photos.length > 0) {
-      popupContent += '<br>' + photos.map(p => `<img src="${p}" style="max-width:200px; border-radius:6px; margin-top:4px;" onclick="openLightbox('${p}')">`).join('');
+    const mediaItems = getMediaItems(u);
+    if (mediaItems.length > 0) {
+      popupContent += '<br>' + mediaItems.map(m => {
+        if (m.type === 'video') {
+          return `<video src="${m.url}" style="max-width:200px; border-radius:6px; margin-top:4px;" controls playsinline webkit-playsinline preload="metadata"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''}></video>`;
+        }
+        return `<img src="${m.url}" style="max-width:200px; border-radius:6px; margin-top:4px;" onclick="openLightbox('${m.url}','photo')">`;
+      }).join('');
     }
 
     const marker = L.marker([u.estimated_lat, u.estimated_lon], { icon, zIndexOffset: 500 })
@@ -2960,9 +3296,29 @@ function renderCrewUpdateMarkers() {
   }
 }
 
-function openLightbox(url) {
-  document.getElementById('lightboxImg').src = url;
+function openLightbox(url, type) {
+  const imgEl = document.getElementById('lightboxImg');
+  const vidEl = document.getElementById('lightboxVideo');
+  if (type === 'video') {
+    imgEl.style.display = 'none';
+    vidEl.style.display = 'block';
+    vidEl.src = url;
+  } else {
+    vidEl.style.display = 'none';
+    vidEl.src = '';
+    imgEl.style.display = 'block';
+    imgEl.src = url;
+  }
   document.getElementById('photoLightbox').classList.remove('hidden');
+}
+
+function closeLightbox(event) {
+  // Don't close if clicking on the video controls
+  if (event.target.tagName === 'VIDEO') return;
+  const vidEl = document.getElementById('lightboxVideo');
+  vidEl.pause();
+  vidEl.src = '';
+  document.getElementById('photoLightbox').classList.add('hidden');
 }
 
 async function fetchUpdates() {

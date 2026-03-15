@@ -10,6 +10,12 @@ const https = require('https');
 const http = require('http');
 const sharp = require('sharp');
 const crypto = require('crypto');
+const multer = require('multer');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegStatic = require('ffmpeg-static');
+const webPush = require('web-push');
+
+ffmpeg.setFfmpegPath(ffmpegStatic);
 
 const app = express();
 app.set('trust proxy', 1);
@@ -27,10 +33,59 @@ const commentLimiter = rateLimit({ windowMs: 60000, max: 10, standardHeaders: tr
 const dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-// Serve uploaded images
+// Serve uploaded images and videos
 const uploadsDir = path.join(dataDir, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+// Serve uploads with Accept-Ranges for video streaming
+app.use('/uploads', (req, res, next) => {
+  const ext = path.extname(req.path).toLowerCase();
+  const mimeTypes = { '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm' };
+  if (mimeTypes[ext]) {
+    const filePath = path.join(uploadsDir, req.path);
+    // Prevent path traversal
+    if (!filePath.startsWith(uploadsDir)) return res.status(403).end();
+    if (!fs.existsSync(filePath)) return res.status(404).end();
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunkSize = end - start + 1;
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': mimeTypes[ext],
+      });
+      fs.createReadStream(filePath, { start, end }).pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Content-Type': mimeTypes[ext],
+        'Accept-Ranges': 'bytes',
+      });
+      fs.createReadStream(filePath).pipe(res);
+    }
+  } else {
+    next();
+  }
+});
 app.use('/uploads', express.static(uploadsDir));
+
+// Multer config for file uploads (50MB per file)
+const uploadsTmpDir = path.join(uploadsDir, 'tmp');
+if (!fs.existsSync(uploadsTmpDir)) fs.mkdirSync(uploadsTmpDir, { recursive: true });
+const upload = multer({
+  dest: uploadsTmpDir,
+  limits: { fileSize: 50 * 1024 * 1024, files: 5 },
+  fileFilter: (req, file, cb) => {
+    const allowed = /^(image\/(jpeg|png|gif|webp|heic|heif)|video\/(mp4|quicktime|webm|x-m4v))$/;
+    cb(null, allowed.test(file.mimetype));
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 const AISSTREAM_API_KEY = process.env.AISSTREAM_API_KEY || '';
@@ -42,8 +97,10 @@ const MMSI = '261006055';
 const ROUTE_WAYPOINTS = [
   { name: 'Ismailia', lat: 30.60, lon: 32.27 },
   { name: 'Port Said', lat: 31.27, lon: 32.30 },
-  { name: 'Open Sea', lat: 33.0, lon: 30.0 },
-  { name: 'Open Sea', lat: 34.2, lon: 27.5 },
+  { name: 'Open Sea', lat: 32.5, lon: 32.5 },
+  { name: 'Limassol', lat: 34.67, lon: 33.04 },
+  { name: 'Open Sea', lat: 34.5, lon: 30.0 },
+  { name: 'Open Sea', lat: 34.8, lon: 27.5 },
   { name: 'Crete', lat: 35.34, lon: 25.14 },
   { name: 'Open Sea', lat: 35.2, lon: 23.0 },
   { name: 'Open Sea', lat: 36.0, lon: 20.0 },
@@ -104,6 +161,7 @@ try { db.exec('ALTER TABLE updates ADD COLUMN wind_speed REAL'); } catch (e) { /
 try { db.exec('ALTER TABLE updates ADD COLUMN wave_height REAL'); } catch (e) { /* already exists */ }
 try { db.exec('ALTER TABLE updates ADD COLUMN sea_temp REAL'); } catch (e) { /* already exists */ }
 try { db.exec('ALTER TABLE updates ADD COLUMN pinned INTEGER DEFAULT 0'); } catch (e) { /* already exists */ }
+try { db.exec('ALTER TABLE updates ADD COLUMN media_url TEXT'); } catch (e) { /* already exists */ }
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS forecast_cache (
@@ -161,7 +219,106 @@ db.exec(`
   )
 `);
 
-const insertUpdate = db.prepare('INSERT INTO updates (crew_name, message, photo_url, timestamp, estimated_lat, estimated_lon, wind_speed, wave_height, sea_temp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+// --- Push Notification Tables ---
+db.exec(`
+  CREATE TABLE IF NOT EXISTS config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    endpoint TEXT NOT NULL UNIQUE,
+    keys_p256dh TEXT NOT NULL,
+    keys_auth TEXT NOT NULL,
+    timestamp TEXT NOT NULL
+  )
+`);
+
+// --- VAPID Key Setup ---
+function getOrCreateVapidKeys() {
+  const pubRow = db.prepare("SELECT value FROM config WHERE key = 'vapid_public_key'").get();
+  const privRow = db.prepare("SELECT value FROM config WHERE key = 'vapid_private_key'").get();
+
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    return { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY };
+  }
+
+  if (pubRow && privRow) {
+    return { publicKey: pubRow.value, privateKey: privRow.value };
+  }
+
+  // Generate new keys
+  const vapidKeys = webPush.generateVAPIDKeys();
+  db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES ('vapid_public_key', ?)").run(vapidKeys.publicKey);
+  db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES ('vapid_private_key', ?)").run(vapidKeys.privateKey);
+  console.log('=== VAPID KEYS GENERATED ===');
+  console.log('VAPID_PUBLIC_KEY=' + vapidKeys.publicKey);
+  console.log('VAPID_PRIVATE_KEY=' + vapidKeys.privateKey);
+  console.log('Save these as environment variables for persistence across deploys.');
+  console.log('============================');
+  return vapidKeys;
+}
+
+const vapidKeys = getOrCreateVapidKeys();
+webPush.setVapidDetails('mailto:blue-marine@tracker.local', vapidKeys.publicKey, vapidKeys.privateKey);
+
+// --- Push Notification Helpers ---
+let lastNotificationTime = 0;
+const NOTIFICATION_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+
+function canSendNotification() {
+  const now = Date.now();
+  if (now - lastNotificationTime < NOTIFICATION_COOLDOWN_MS) return false;
+  lastNotificationTime = now;
+  return true;
+}
+
+async function sendPushToAll(payload) {
+  const subs = db.prepare('SELECT * FROM subscriptions').all();
+  if (subs.length === 0) return;
+  const payloadStr = JSON.stringify(payload);
+  const staleIds = [];
+  for (const sub of subs) {
+    const pushSub = {
+      endpoint: sub.endpoint,
+      keys: { p256dh: sub.keys_p256dh, auth: sub.keys_auth }
+    };
+    try {
+      await webPush.sendNotification(pushSub, payloadStr);
+    } catch (err) {
+      if (err.statusCode === 404 || err.statusCode === 410) {
+        staleIds.push(sub.id);
+      }
+      console.error('Push send error:', err.statusCode || err.message);
+    }
+  }
+  // Clean up expired subscriptions
+  if (staleIds.length > 0) {
+    const del = db.prepare('DELETE FROM subscriptions WHERE id = ?');
+    for (const id of staleIds) del.run(id);
+    console.log(`Removed ${staleIds.length} expired push subscriptions`);
+  }
+}
+
+const insertUpdate = db.prepare('INSERT INTO updates (crew_name, message, photo_url, media_url, timestamp, estimated_lat, estimated_lon, wind_speed, wave_height, sea_temp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+
+// Generate video thumbnail using ffmpeg
+function generateVideoThumbnail(videoPath, thumbnailPath) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(videoPath)
+      .screenshots({
+        timestamps: ['1'],
+        filename: path.basename(thumbnailPath),
+        folder: path.dirname(thumbnailPath),
+        size: '480x?'
+      })
+      .on('end', () => resolve())
+      .on('error', (err) => reject(err));
+  });
+}
 const getUpdates = db.prepare('SELECT * FROM updates ORDER BY id DESC LIMIT 50');
 const updateEstimatedLocation = db.prepare('UPDATE updates SET estimated_lat = ?, estimated_lon = ? WHERE id = ?');
 const pinUpdate = db.prepare('UPDATE updates SET pinned = ? WHERE id = ?');
@@ -383,6 +540,10 @@ function checkMilestones(lat, lon, timestamp) {
       if (!existing) {
         insertMilestone.run(wp.name, lat, lon, timestamp);
         console.log(`Milestone reached: ${wp.name} at ${dist.toFixed(1)} nm`);
+        // Send milestone push notification
+        if (canSendNotification()) {
+          sendPushToAll({ title: '\uD83C\uDFC1 BLUE MARINE', body: `Passed ${wp.name}!`, type: 'milestone' }).catch(err => console.error('Push error:', err.message));
+        }
       }
     }
   }
@@ -584,50 +745,87 @@ app.get('/api/updates', readLimiter, (req, res) => {
   res.json(result);
 });
 
-app.post('/api/updates', adminLimiter, async (req, res) => {
+app.post('/api/updates', adminLimiter, upload.array('files', 5), async (req, res) => {
   const pin = req.headers['x-admin-pin'] || req.body.pin;
   if (pin !== ADMIN_PIN) {
     return res.status(403).json({ error: 'Invalid PIN' });
   }
-  const { crew_name, message, photo, photos } = req.body;
-  if (!message && !photo && (!photos || photos.length === 0)) {
-    return res.status(400).json({ error: 'Message or photo required' });
+  const { crew_name, message } = req.body;
+  const files = req.files || [];
+  if (!message && files.length === 0) {
+    return res.status(400).json({ error: 'Message or media required' });
   }
+
+  // Check total upload size (100MB max)
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+  if (totalSize > 100 * 1024 * 1024) {
+    // Clean up temp files
+    for (const f of files) try { fs.unlinkSync(f.path); } catch (e) {}
+    return res.status(400).json({ error: 'Total upload size exceeds 100MB' });
+  }
+
   // Duplicate detection: same message text within last 60 seconds
   if (message) {
     const recent = db.prepare("SELECT id FROM updates WHERE message = ? AND timestamp > datetime('now', '-60 seconds')").get(message);
     if (recent) {
+      for (const f of files) try { fs.unlinkSync(f.path); } catch (e) {}
       return res.status(409).json({ error: 'Duplicate update — already posted' });
     }
   }
 
-  // Collect all photos (support both single 'photo' and multi 'photos')
-  const photoSources = [];
-  if (photos && Array.isArray(photos)) {
-    photoSources.push(...photos.slice(0, 5));
-  } else if (photo) {
-    photoSources.push(photo);
-  }
-
-  const photoUrls = [];
-  for (const src of photoSources) {
+  const mediaItems = [];
+  for (const file of files) {
     try {
-      const matches = src.match(/^data:image\/\w+;base64,(.+)$/);
-      if (!matches) continue;
-      const buf = Buffer.from(matches[1], 'base64');
-      const filename = crypto.randomBytes(8).toString('hex') + '.jpg';
+      const isVideo = file.mimetype.startsWith('video/');
+      const ext = isVideo ? path.extname(file.originalname).toLowerCase() || '.mp4' : '.jpg';
+      const basename = crypto.randomBytes(8).toString('hex');
+      const filename = basename + ext;
       const outPath = path.join(uploadsDir, filename);
-      await sharp(buf)
-        .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 80 })
-        .toFile(outPath);
-      photoUrls.push('/uploads/' + filename);
+
+      if (isVideo) {
+        // Move video file directly (no compression)
+        try { fs.renameSync(file.path, outPath); } catch (e) {
+          fs.copyFileSync(file.path, outPath);
+          fs.unlinkSync(file.path);
+        }
+        // Generate thumbnail
+        const thumbFilename = basename + '_thumb.jpg';
+        const thumbPath = path.join(uploadsDir, thumbFilename);
+        try {
+          await generateVideoThumbnail(outPath, thumbPath);
+        } catch (err) {
+          console.error('Thumbnail generation error:', err.message);
+        }
+        const thumbExists = fs.existsSync(thumbPath);
+        mediaItems.push({
+          url: '/uploads/' + filename,
+          type: 'video',
+          thumbnail_url: thumbExists ? '/uploads/' + thumbFilename : null
+        });
+      } else {
+        // Process image with sharp
+        const buf = fs.readFileSync(file.path);
+        await sharp(buf)
+          .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toFile(outPath);
+        try { fs.unlinkSync(file.path); } catch (e) {}
+        mediaItems.push({
+          url: '/uploads/' + filename,
+          type: 'photo',
+          thumbnail_url: null
+        });
+      }
     } catch (err) {
-      console.error('Photo processing error:', err.message);
+      console.error('Media processing error:', err.message);
+      try { fs.unlinkSync(file.path); } catch (e) {}
     }
   }
 
-  // Store as JSON array if multiple, single string if one, null if none
+  // Store media_url as JSON array, keep photo_url for backward compat
+  const mediaValue = mediaItems.length > 0 ? JSON.stringify(mediaItems) : null;
+  // Legacy photo_url: just photo URLs for backward compat
+  const photoUrls = mediaItems.filter(m => m.type === 'photo').map(m => m.url);
   let photoValue = null;
   if (photoUrls.length === 1) photoValue = photoUrls[0];
   else if (photoUrls.length > 1) photoValue = JSON.stringify(photoUrls);
@@ -649,9 +847,15 @@ app.post('/api/updates', adminLimiter, async (req, res) => {
     }
   }
 
-  insertUpdate.run(name, message || null, photoValue, timestamp, loc.lat, loc.lon, wx.wind_speed, wx.wave_height, wx.sea_temp);
-  console.log(`Update posted by ${name}: ${message || '(photo)'} [${photoUrls.length} photos] | est. location: ${loc.lat != null ? loc.lat.toFixed(4) + ',' + loc.lon.toFixed(4) : 'none'}`);
+  insertUpdate.run(name, message || null, photoValue, mediaValue, timestamp, loc.lat, loc.lon, wx.wind_speed, wx.wave_height, wx.sea_temp);
+  console.log(`Update posted by ${name}: ${message || '(media)'} [${mediaItems.length} files] | est. location: ${loc.lat != null ? loc.lat.toFixed(4) + ',' + loc.lon.toFixed(4) : 'none'}`);
   res.json({ success: true });
+
+  // Send push notification (non-blocking)
+  if (canSendNotification()) {
+    const body = message ? `${name}: ${message.slice(0, 50)}${message.length > 50 ? '...' : ''}` : `${name} posted a new update`;
+    sendPushToAll({ title: '\uD83D\uDCF8 BLUE MARINE', body, type: 'update' }).catch(err => console.error('Push error:', err.message));
+  }
 });
 
 app.delete('/api/updates/:id', adminLimiter, (req, res) => {
@@ -787,6 +991,79 @@ try { generateDailyDigest(); } catch (err) { console.error('Digest generation er
 setInterval(() => {
   try { generateDailyDigest(); } catch (err) { console.error('Digest generation error:', err.message); }
 }, 3600000);
+
+// --- Signal Lost Check (every 30 min) ---
+let signalLostNotified = false;
+function checkSignalLost() {
+  try {
+    const latest = getLatest.get();
+    if (!latest) return;
+    const diffMs = Date.now() - new Date(latest.timestamp).getTime();
+    const sixHours = 6 * 3600000;
+    if (diffMs > sixHours && !signalLostNotified) {
+      signalLostNotified = true;
+      const coast = nearestCoastName(latest.lat, latest.lon);
+      const locStr = coast ? `near ${coast}` : `at ${latest.lat.toFixed(2)}, ${latest.lon.toFixed(2)}`;
+      if (canSendNotification()) {
+        sendPushToAll({ title: '\u26A0\uFE0F BLUE MARINE', body: `No signal for 6+ hours \u2014 last seen ${locStr}`, type: 'signal_lost' }).catch(err => console.error('Push error:', err.message));
+      }
+    } else if (diffMs <= sixHours) {
+      signalLostNotified = false;
+    }
+  } catch (err) {
+    console.error('Signal lost check error:', err.message);
+  }
+}
+
+// Server-side nearestCoastName for signal lost notifications
+function nearestCoastName(lat, lon) {
+  const coasts = [
+    { name: 'Ismailia', lat: 30.60, lon: 32.27 },
+    { name: 'Port Said', lat: 31.27, lon: 32.30 },
+    { name: 'Limassol', lat: 34.67, lon: 33.04 },
+    { name: 'Crete', lat: 35.34, lon: 25.14 },
+    { name: 'Malta', lat: 35.90, lon: 14.51 },
+    { name: 'Sicily', lat: 37.08, lon: 15.29 },
+    { name: 'Sardinia', lat: 39.22, lon: 9.12 },
+    { name: 'Formentera', lat: 38.71, lon: 1.44 },
+    { name: 'Almería', lat: 36.84, lon: -2.46 },
+    { name: 'Benalmádena', lat: 36.60, lon: -4.52 }
+  ];
+  let minDist = Infinity, closest = null;
+  for (const c of coasts) {
+    const d = haversineNm(lat, lon, c.lat, c.lon);
+    if (d < minDist) { minDist = d; closest = c.name; }
+  }
+  return minDist < 100 ? closest : null;
+}
+
+setInterval(checkSignalLost, 30 * 60 * 1000);
+setTimeout(checkSignalLost, 60000); // Check 1 min after startup
+
+// --- Push Subscription API ---
+app.get('/api/vapid-public-key', readLimiter, (req, res) => {
+  res.json({ publicKey: vapidKeys.publicKey });
+});
+
+app.post('/api/subscribe', readLimiter, (req, res) => {
+  const { endpoint, keys } = req.body;
+  if (!endpoint || !keys || !keys.p256dh || !keys.auth) {
+    return res.status(400).json({ error: 'Invalid subscription' });
+  }
+  try {
+    db.prepare('INSERT OR REPLACE INTO subscriptions (endpoint, keys_p256dh, keys_auth, timestamp) VALUES (?, ?, ?, ?)').run(endpoint, keys.p256dh, keys.auth, new Date().toISOString());
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save subscription' });
+  }
+});
+
+app.post('/api/unsubscribe', readLimiter, (req, res) => {
+  const { endpoint } = req.body;
+  if (!endpoint) return res.status(400).json({ error: 'Endpoint required' });
+  db.prepare('DELETE FROM subscriptions WHERE endpoint = ?').run(endpoint);
+  res.json({ success: true });
+});
 
 // --- Forecast API ---
 app.get('/api/forecast', readLimiter, (req, res) => {
