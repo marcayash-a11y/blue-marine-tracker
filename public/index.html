@@ -2232,7 +2232,7 @@ function updatePageTitle() {
   }
   const d = latestData;
   const speedStr = d.speed != null ? d.speed.toFixed(1) + 'kn' : 'no speed';
-  const phaseInfo = getCurrentPhase(d.lat, d.lon);
+  const phaseInfo = getCurrentPhase(d.lat, d.lon, d.current_phase);
   const nearStr = phaseInfo.phase.name.replace(/Phase \d+: /, '').split(' \u2192 ')[0];
   document.title = '\u26F5 BLUE MARINE \u2014 ' + speedStr + ' near ' + nearStr;
 }
@@ -2255,32 +2255,42 @@ const PHASES = [
   { name: 'Phase 10: Almer\u00eda \u2192 Benalm\u00e1dena', nm: 110, from: {lat:36.84, lon:-2.46}, to: {lat:36.60, lon:-4.52} },
 ];
 
-function getCurrentPhase(lat, lon) {
+function getCurrentPhase(lat, lon, serverPhase) {
   let bestIdx = 0;
-  let bestDist = Infinity;
-  for (let i = 0; i < PHASES.length; i++) {
-    const p = PHASES[i];
-    const dFrom = haversineNm(lat, lon, p.from.lat, p.from.lon);
-    const dTo = haversineNm(lat, lon, p.to.lat, p.to.lon);
-    const minD = Math.min(dFrom, dTo);
-    // Check if boat is roughly between from and to (projection onto segment)
-    const segLen = haversineNm(p.from.lat, p.from.lon, p.to.lat, p.to.lon);
-    const proj = (dFrom**2 + segLen**2 - dTo**2) / (2 * segLen);
-    const onSegment = proj >= -50 && proj <= segLen + 50; // generous tolerance
-    if (onSegment && minD < bestDist) {
-      bestDist = minD;
-      bestIdx = i;
+
+  if (serverPhase && serverPhase.index != null) {
+    // Use server-calculated phase index (updated on every position save)
+    bestIdx = serverPhase.index;
+  } else {
+    // Fallback: client-side detection using sum-of-distances method
+    // The boat is on the leg where distance_to_start + distance_to_end is closest to actual leg distance
+    let bestDiff = Infinity;
+    for (let i = 0; i < PHASES.length; i++) {
+      const p = PHASES[i];
+      const dFrom = haversineNm(lat, lon, p.from.lat, p.from.lon);
+      const dTo = haversineNm(lat, lon, p.to.lat, p.to.lon);
+      // If within 20nm of end waypoint and there's a next phase, use next phase
+      if (dTo <= 20 && i < PHASES.length - 1) {
+        bestIdx = i + 1;
+        bestDiff = -1; // flag that we found a waypoint match
+        break;
+      }
+      const legDist = haversineNm(p.from.lat, p.from.lon, p.to.lat, p.to.lon);
+      const diff = Math.abs((dFrom + dTo) - legDist);
+      if (diff < bestDiff) {
+        bestDiff = diff;
+        bestIdx = i;
+      }
     }
   }
-  // Also check perpendicular distance for better matching
+
+  // Calculate remaining distances using projection
   const p = PHASES[bestIdx];
   const segLen = haversineNm(p.from.lat, p.from.lon, p.to.lat, p.to.lon);
   const dFrom = haversineNm(lat, lon, p.from.lat, p.from.lon);
   const dTo = haversineNm(lat, lon, p.to.lat, p.to.lon);
   const proj = Math.max(0, Math.min(segLen, (dFrom**2 + segLen**2 - dTo**2) / (2 * segLen)));
-  const distInPhase = proj;
   const phaseRemaining = Math.max(0, Math.round(segLen - proj));
-  // Total remaining = phase remaining + all subsequent phases
   let totalRemaining = phaseRemaining;
   for (let i = bestIdx + 1; i < PHASES.length; i++) {
     totalRemaining += PHASES[i].nm;
@@ -2683,7 +2693,7 @@ function updateUI() {
   }
 
   // Voyage Timing
-  const phaseInfo = getCurrentPhase(d.lat, d.lon);
+  const phaseInfo = getCurrentPhase(d.lat, d.lon, d.current_phase);
   document.getElementById('voyagePhase').innerHTML = '<span class="phase-leg">' + phaseInfo.phase.name + '</span><br>' + phaseInfo.phase.nm + ' nm leg';
   document.getElementById('voyagePhaseRemaining').textContent = phaseInfo.phaseRemaining + ' nm';
   document.getElementById('voyageTotalRemaining').textContent = phaseInfo.totalRemaining + ' nm';
@@ -3396,7 +3406,7 @@ function renderDigestCard(d) {
 
 function renderCarouselSlide(m) {
   if (m.type === 'video') {
-    return `<div class="carousel-slide"><video src="${m.url}" controls playsinline webkit-playsinline preload="metadata"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video><div class="play-overlay" style="pointer-events:none;">\u25B6\uFE0F</div></div>`;
+    return `<div class="carousel-slide"><video src="${m.url}" controls playsinline webkit-playsinline preload="none" loading="lazy"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video><div class="play-overlay" style="pointer-events:none;">\u25B6\uFE0F</div></div>`;
   }
   return `<div class="carousel-slide"><img src="${m.url}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')"></div>`;
 }
@@ -3407,7 +3417,7 @@ function renderMediaArea(media, updateId) {
   if (media.length === 1) {
     const m = media[0];
     if (m.type === 'video') {
-      return `<div class="update-media-area"${dblTap}><video src="${m.url}" controls playsinline webkit-playsinline preload="metadata"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video></div>`;
+      return `<div class="update-media-area"${dblTap}><video src="${m.url}" controls playsinline webkit-playsinline preload="none" loading="lazy"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video></div>`;
     }
     return `<div class="update-media-area"${dblTap}><img src="${m.url}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')"></div>`;
   }
@@ -3625,7 +3635,7 @@ function renderCrewUpdateMarkers() {
     if (mediaItems.length > 0) {
       popupContent += '<br>' + mediaItems.map(m => {
         if (m.type === 'video') {
-          return `<video src="${m.url}" style="max-width:200px; border-radius:6px; margin-top:4px;" controls playsinline webkit-playsinline preload="metadata"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''}></video>`;
+          return `<video src="${m.url}" style="max-width:200px; border-radius:6px; margin-top:4px;" controls playsinline webkit-playsinline preload="none" loading="lazy"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''}></video>`;
         }
         return `<img src="${m.url}" style="max-width:200px; border-radius:6px; margin-top:4px;" onclick="openLightbox('${m.url}','photo')">`;
       }).join('');
@@ -3859,10 +3869,10 @@ fetchUpdates();
 fetchDigests();
 fetchForecast();
 
-// Auto-refresh every 60 seconds
-setInterval(fetchData, 60000);
-setInterval(fetchUpdates, 60000);
-setInterval(fetchMilestones, 60000);
+// Auto-refresh every 120 seconds
+setInterval(fetchData, 120000);
+setInterval(fetchUpdates, 120000);
+setInterval(fetchMilestones, 120000);
 // Forecast refreshes every 5 minutes (changes slowly)
 setInterval(fetchForecast, 300000);
 

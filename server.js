@@ -21,7 +21,13 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(compression());
 app.use(express.json({ limit: '15mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'public, max-age=300');
+    }
+  }
+}));
 
 // --- Rate Limiting ---
 const readLimiter = rateLimit({ windowMs: 60000, max: 60, standardHeaders: true, legacyHeaders: false });
@@ -59,6 +65,7 @@ app.use('/uploads', (req, res, next) => {
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
         'Content-Type': mimeTypes[ext],
+        'Cache-Control': 'public, max-age=86400',
       });
       fs.createReadStream(filePath, { start, end }).pipe(res);
     } else {
@@ -66,6 +73,7 @@ app.use('/uploads', (req, res, next) => {
         'Content-Length': fileSize,
         'Content-Type': mimeTypes[ext],
         'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=86400',
       });
       fs.createReadStream(filePath).pipe(res);
     }
@@ -73,7 +81,11 @@ app.use('/uploads', (req, res, next) => {
     next();
   }
 });
-app.use('/uploads', express.static(uploadsDir));
+app.use('/uploads', express.static(uploadsDir, {
+  setHeaders: (res, filePath) => {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  }
+}));
 
 // Multer config for file uploads (50MB per file)
 const uploadsTmpDir = path.join(uploadsDir, 'tmp');
@@ -117,6 +129,60 @@ const ROUTE_WAYPOINTS = [
 ];
 
 const TOTAL_DISTANCE_NM = 1925;
+
+// --- Voyage Phases (for server-side auto-detection) ---
+const VOYAGE_PHASES = [
+  { name: 'Phase 3: Port Said → Limassol',      nm: 230, from: {lat:31.27, lon:32.30}, to: {lat:34.67, lon:33.04} },
+  { name: 'Phase 4: Limassol → Crete',           nm: 480, from: {lat:34.67, lon:33.04}, to: {lat:35.34, lon:25.14} },
+  { name: 'Phase 5: Crete → Malta',              nm: 495, from: {lat:35.34, lon:25.14}, to: {lat:35.90, lon:14.51} },
+  { name: 'Phase 6: Malta → Sicily',             nm: 130, from: {lat:35.90, lon:14.51}, to: {lat:37.08, lon:15.29} },
+  { name: 'Phase 7: Sicily → Sardinia',          nm: 190, from: {lat:37.08, lon:15.29}, to: {lat:39.22, lon: 9.12} },
+  { name: 'Phase 8: Sardinia → Formentera',      nm: 345, from: {lat:39.22, lon: 9.12}, to: {lat:38.71, lon: 1.44} },
+  { name: 'Phase 9: Formentera → Almería',       nm: 215, from: {lat:38.71, lon: 1.44}, to: {lat:36.84, lon:-2.46} },
+  { name: 'Phase 10: Almería → Benalmádena',     nm: 110, from: {lat:36.84, lon:-2.46}, to: {lat:36.60, lon:-4.52} },
+];
+
+// Calculate current voyage phase from boat position
+function calculateCurrentPhase(lat, lon) {
+  // Check if boat is within 20nm of any waypoint — if so, use the phase departing from that waypoint
+  for (let i = 0; i < VOYAGE_PHASES.length; i++) {
+    const p = VOYAGE_PHASES[i];
+    const distToEnd = haversineNm(lat, lon, p.to.lat, p.to.lon);
+    if (distToEnd <= 20 && i < VOYAGE_PHASES.length - 1) {
+      // Near the end of this leg = at the start of the next leg
+      return { index: i + 1, phase: VOYAGE_PHASES[i + 1] };
+    }
+  }
+  // Check if near the start of the first phase
+  const distToFirstStart = haversineNm(lat, lon, VOYAGE_PHASES[0].from.lat, VOYAGE_PHASES[0].from.lon);
+  if (distToFirstStart <= 20) {
+    return { index: 0, phase: VOYAGE_PHASES[0] };
+  }
+
+  // For each leg, find the one where distance_to_start + distance_to_end is closest to the actual leg distance
+  let bestIdx = 0;
+  let bestDiff = Infinity;
+  for (let i = 0; i < VOYAGE_PHASES.length; i++) {
+    const p = VOYAGE_PHASES[i];
+    const dFrom = haversineNm(lat, lon, p.from.lat, p.from.lon);
+    const dTo = haversineNm(lat, lon, p.to.lat, p.to.lon);
+    const legDist = haversineNm(p.from.lat, p.from.lon, p.to.lat, p.to.lon);
+    const diff = Math.abs((dFrom + dTo) - legDist);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      bestIdx = i;
+    }
+  }
+  return { index: bestIdx, phase: VOYAGE_PHASES[bestIdx] };
+}
+
+// Store current phase in config table
+function updateStoredPhase(lat, lon) {
+  const result = calculateCurrentPhase(lat, lon);
+  const phaseData = JSON.stringify({ index: result.index, name: result.phase.name, nm: result.phase.nm });
+  db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES ('current_phase', ?)").run(phaseData);
+  return result;
+}
 
 // --- SQLite Setup ---
 
@@ -314,7 +380,7 @@ function generateVideoThumbnail(videoPath, thumbnailPath) {
         timestamps: ['1'],
         filename: path.basename(thumbnailPath),
         folder: path.dirname(thumbnailPath),
-        size: '480x?'
+        size: '320x?'
       })
       .on('end', () => resolve())
       .on('error', (err) => reject(err));
@@ -574,6 +640,11 @@ async function savePosition(lat, lon, speed, course, heading, timestamp) {
     db.prepare('UPDATE positions SET calculated_speed = ? WHERE id = (SELECT MAX(id) FROM positions)').run(calculatedSpeed);
   }
   console.log(`Position saved: ${lat.toFixed(4)}, ${lon.toFixed(4)} @ ${speed} kn (calc: ${calculatedSpeed != null ? calculatedSpeed + ' kn' : 'n/a'}) | ${timestamp}`);
+  // Update voyage phase
+  try {
+    const phase = updateStoredPhase(lat, lon);
+    console.log(`Phase: ${phase.phase.name}`);
+  } catch (err) { console.error('Phase update error:', err.message); }
   // Check for voyage milestones
   try { checkMilestones(lat, lon, timestamp); } catch (err) { console.error('Milestone check error:', err.message); }
   // Retroactively improve crew update locations near this position
@@ -651,6 +722,13 @@ app.get('/api/debug', (req, res) => {
 
 app.get('/api/latest', readLimiter, (req, res) => {
   const row = getLatest.get();
+  if (row) {
+    // Include stored phase
+    const phaseRow = db.prepare("SELECT value FROM config WHERE key = 'current_phase'").get();
+    if (phaseRow) {
+      try { row.current_phase = JSON.parse(phaseRow.value); } catch (e) {}
+    }
+  }
   res.json(row || null);
 });
 
@@ -1154,5 +1232,13 @@ app.get('/api/forecast', readLimiter, (req, res) => {
 // --- Start ---
 app.listen(PORT, () => {
   console.log(`Blue Marine Tracker running on port ${PORT}`);
+  // Seed current phase from latest position on startup
+  try {
+    const latest = getLatest.get();
+    if (latest) {
+      const phase = updateStoredPhase(latest.lat, latest.lon);
+      console.log(`Phase initialized: ${phase.phase.name}`);
+    }
+  } catch (err) { console.error('Phase init error:', err.message); }
   connectAIS();
 });
