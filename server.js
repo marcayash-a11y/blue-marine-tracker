@@ -144,22 +144,28 @@ const VOYAGE_PHASES = [
 
 // Calculate current voyage phase from boat position
 function calculateCurrentPhase(lat, lon) {
-  // Check if boat is within 20nm of any waypoint — if so, use the phase departing from that waypoint
+  // Check if boat is within 20nm of any phase waypoint (start or end)
   for (let i = 0; i < VOYAGE_PHASES.length; i++) {
     const p = VOYAGE_PHASES[i];
+    const distToStart = haversineNm(lat, lon, p.from.lat, p.from.lon);
     const distToEnd = haversineNm(lat, lon, p.to.lat, p.to.lon);
-    if (distToEnd <= 20 && i < VOYAGE_PHASES.length - 1) {
-      // Near the end of this leg = at the start of the next leg
-      return { index: i + 1, phase: VOYAGE_PHASES[i + 1] };
+
+    // Near the end of this leg → advance to next phase (or stay on last phase)
+    if (distToEnd <= 20) {
+      if (i < VOYAGE_PHASES.length - 1) {
+        return { index: i + 1, phase: VOYAGE_PHASES[i + 1] };
+      }
+      return { index: i, phase: VOYAGE_PHASES[i] }; // arrived at final destination
+    }
+
+    // Near the start of this leg → use this phase
+    if (distToStart <= 20) {
+      return { index: i, phase: VOYAGE_PHASES[i] };
     }
   }
-  // Check if near the start of the first phase
-  const distToFirstStart = haversineNm(lat, lon, VOYAGE_PHASES[0].from.lat, VOYAGE_PHASES[0].from.lon);
-  if (distToFirstStart <= 20) {
-    return { index: 0, phase: VOYAGE_PHASES[0] };
-  }
 
-  // For each leg, find the one where distance_to_start + distance_to_end is closest to the actual leg distance
+  // Best-fit: the boat is on the leg where distance_to_start + distance_to_end
+  // is closest to the actual straight-line leg distance (triangle inequality)
   let bestIdx = 0;
   let bestDiff = Infinity;
   for (let i = 0; i < VOYAGE_PHASES.length; i++) {
@@ -176,11 +182,11 @@ function calculateCurrentPhase(lat, lon) {
   return { index: bestIdx, phase: VOYAGE_PHASES[bestIdx] };
 }
 
-// Store current phase in config table
+// Store current phase in config table (called on every position save)
 function updateStoredPhase(lat, lon) {
   const result = calculateCurrentPhase(lat, lon);
   const phaseData = JSON.stringify({ index: result.index, name: result.phase.name, nm: result.phase.nm });
-  db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES ('current_phase', ?)").run(phaseData);
+  upsertPhase.run(phaseData);
   return result;
 }
 
@@ -416,6 +422,8 @@ const getCommentsForUpdate = db.prepare('SELECT * FROM comments WHERE update_id 
 const insertDigest = db.prepare('INSERT OR IGNORE INTO digests (day_number, date, distance_nm, avg_speed, max_speed, positions_count, updates_count, weather_summary, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
 const getDigests = db.prepare('SELECT * FROM digests ORDER BY date DESC LIMIT 30');
 const getDigestByDate = db.prepare('SELECT id FROM digests WHERE date = ?');
+
+const upsertPhase = db.prepare("INSERT OR REPLACE INTO config (key, value) VALUES ('current_phase', ?)");
 const getPositionsForDate = db.prepare("SELECT * FROM positions WHERE date(timestamp) = ? ORDER BY timestamp ASC");
 const getUpdatesCountForDate = db.prepare("SELECT count(*) as cnt FROM updates WHERE date(timestamp) = ?");
 

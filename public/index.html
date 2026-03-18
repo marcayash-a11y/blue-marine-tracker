@@ -547,20 +547,172 @@ body {
   border-color: var(--red) !important;
 }
 
-/* Speed Sparkline */
-.sparkline-container {
+/* Speed Chart */
+.speed-chart-container {
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid rgba(30,45,61,0.5);
 }
-.sparkline-label {
+.speed-chart-label {
   font-size: 0.68rem;
   color: var(--text-dim);
   margin-bottom: 6px;
 }
-.sparkline-svg {
+.speed-chart-svg {
   width: 100%;
-  height: 40px;
+  height: 140px;
+  cursor: crosshair;
+}
+.speed-chart-toggles {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.speed-chart-toggles button {
+  flex: 1;
+  padding: 4px 0;
+  font-size: 0.65rem;
+  font-family: var(--mono);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.speed-chart-toggles button.active {
+  background: rgba(6,182,212,0.2);
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+.speed-chart-tooltip {
+  position: absolute;
+  background: var(--bg-card);
+  border: 1px solid var(--cyan);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.68rem;
+  font-family: var(--mono);
+  color: var(--text);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* Day Legend on Map */
+.day-legend {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 800;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0;
+  max-height: 300px;
+  overflow: hidden;
+  font-size: 0.7rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  transition: max-height 0.3s;
+}
+.day-legend.collapsed .day-legend-body {
+  display: none;
+}
+.day-legend-header {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+}
+.day-legend-body {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 0 6px 6px;
+}
+.day-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.day-legend-item:hover {
+  background: rgba(6,182,212,0.1);
+}
+.day-legend-swatch {
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.day-legend-label {
+  color: var(--text);
+  flex: 1;
+  min-width: 0;
+}
+.day-legend-dist {
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 0.62rem;
+}
+
+/* Story Dot Markers */
+.story-dot {
+  border-radius: 50%;
+  border: 2px solid var(--cyan);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  background: var(--bg-card);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+.story-dot:hover {
+  transform: scale(1.15);
+}
+.story-dot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.story-dot-simple {
+  border-radius: 50%;
+  background: var(--cyan);
+  border: 2px solid rgba(255,255,255,0.8);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+}
+.story-popup {
+  max-width: 260px;
+}
+.story-popup img, .story-popup video {
+  width: 100%;
+  border-radius: 6px;
+  margin-top: 4px;
+}
+.story-popup .story-meta {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-top: 4px;
+}
+.story-popup .story-msg {
+  margin-top: 4px;
+  font-size: 0.82rem;
+}
+.story-popup .story-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: var(--cyan);
+  cursor: pointer;
 }
 
 /* Light Theme */
@@ -1858,9 +2010,17 @@ body {
         <span class="stat-label">Current Position</span>
         <span class="stat-value" id="statPos">--</span>
       </div>
-      <div class="sparkline-container" id="sparklineContainer">
-        <div class="sparkline-label">Speed (last 24h)</div>
-        <svg class="sparkline-svg" id="sparklineSvg" viewBox="0 0 300 40" preserveAspectRatio="none"></svg>
+      <div class="speed-chart-container" id="speedChartContainer">
+        <div class="speed-chart-label" id="speedChartLabel">Speed (last 48h)</div>
+        <div style="position:relative;">
+          <svg class="speed-chart-svg" id="speedChartSvg"></svg>
+          <div class="speed-chart-tooltip" id="speedChartTooltip" style="display:none;"></div>
+        </div>
+        <div class="speed-chart-toggles">
+          <button class="active" data-range="48h">48h</button>
+          <button data-range="7d">7d</button>
+          <button data-range="all">All</button>
+        </div>
       </div>
     </div>
 
@@ -2237,6 +2397,169 @@ function updatePageTitle() {
   document.title = '\u26F5 BLUE MARINE \u2014 ' + speedStr + ' near ' + nearStr;
 }
 
+// --- Speed Chart ---
+let speedChartRange = '48h';
+
+function renderSpeedChart() {
+  const svg = document.getElementById('speedChartSvg');
+  const container = document.getElementById('speedChartContainer');
+  if (!svg || !historyData || historyData.length < 2) {
+    if (container) container.style.display = 'none';
+    return;
+  }
+  container.style.display = '';
+
+  // Filter data by selected range
+  const now = Date.now();
+  let filtered;
+  if (speedChartRange === '48h') {
+    const cutoff = now - 48 * 3600000;
+    filtered = historyData.filter(p => new Date(p.timestamp).getTime() > cutoff && p.speed != null);
+  } else if (speedChartRange === '7d') {
+    const cutoff = now - 7 * 24 * 3600000;
+    filtered = historyData.filter(p => new Date(p.timestamp).getTime() > cutoff && p.speed != null);
+  } else {
+    filtered = historyData.filter(p => p.speed != null);
+  }
+
+  if (filtered.length < 2) { container.style.display = 'none'; return; }
+
+  const label = document.getElementById('speedChartLabel');
+  if (label) label.textContent = 'Speed (' + (speedChartRange === 'all' ? 'all time' : 'last ' + speedChartRange) + ')';
+
+  const pad = { top: 12, right: 8, bottom: 22, left: 28 };
+  const rect = svg.getBoundingClientRect();
+  const totalW = rect.width || 300;
+  const totalH = 140;
+  const w = totalW - pad.left - pad.right;
+  const h = totalH - pad.top - pad.bottom;
+
+  svg.setAttribute('viewBox', '0 0 ' + totalW + ' ' + totalH);
+
+  const speeds = filtered.map(p => p.speed);
+  const maxSpd = Math.max(Math.ceil(Math.max(...speeds) / 2) * 2, 2); // round up to nearest 2
+  const times = filtered.map(p => new Date(p.timestamp).getTime());
+  const tMin = times[0], tMax = times[times.length - 1];
+  const tRange = tMax - tMin || 1;
+
+  function xPos(t) { return pad.left + ((t - tMin) / tRange) * w; }
+  function yPos(s) { return pad.top + h - (s / maxSpd) * h; }
+
+  let svgContent = '';
+
+  // Grid lines at 2kn intervals
+  for (let s = 0; s <= maxSpd; s += 2) {
+    const y = yPos(s);
+    svgContent += '<line x1="' + pad.left + '" y1="' + y.toFixed(1) + '" x2="' + (totalW - pad.right) + '" y2="' + y.toFixed(1) + '" stroke="rgba(100,116,139,0.15)" stroke-width="0.5"/>';
+    svgContent += '<text x="' + (pad.left - 4) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" fill="var(--text-muted)" font-size="8" font-family="var(--mono)">' + s + '</text>';
+  }
+
+  // Stopped shading (speed < 0.5kn)
+  let inStop = false;
+  let stopStart = 0;
+  for (let i = 0; i < filtered.length; i++) {
+    const t = times[i];
+    const stopped = filtered[i].speed < 0.5;
+    if (stopped && !inStop) { inStop = true; stopStart = t; }
+    if ((!stopped || i === filtered.length - 1) && inStop) {
+      const endT = stopped ? t : times[i - 1];
+      const x1 = xPos(stopStart);
+      const x2 = xPos(endT);
+      if (x2 - x1 > 1) {
+        svgContent += '<rect x="' + x1.toFixed(1) + '" y="' + pad.top + '" width="' + (x2 - x1).toFixed(1) + '" height="' + h + '" fill="rgba(30,41,59,0.35)" rx="1"/>';
+      }
+      inStop = false;
+    }
+  }
+
+  // Area fill
+  const pointCoords = filtered.map((p, i) => xPos(times[i]).toFixed(1) + ',' + yPos(p.speed).toFixed(1));
+  const areaPoints = pad.left.toFixed(1) + ',' + (pad.top + h) + ' ' + pointCoords.join(' ') + ' ' + xPos(tMax).toFixed(1) + ',' + (pad.top + h);
+  svgContent += '<polyline points="' + areaPoints + '" fill="rgba(6,182,212,0.1)" stroke="none"/>';
+
+  // Speed line
+  svgContent += '<polyline points="' + pointCoords.join(' ') + '" fill="none" stroke="#06b6d4" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>';
+
+  // Time labels on x-axis
+  const numLabels = totalW < 250 ? 3 : 5;
+  for (let i = 0; i < numLabels; i++) {
+    const t = tMin + (tRange * i / (numLabels - 1));
+    const d = new Date(t);
+    let lbl;
+    if (speedChartRange === '48h') {
+      lbl = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' });
+    } else {
+      lbl = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'Europe/Berlin' });
+    }
+    svgContent += '<text x="' + xPos(t).toFixed(1) + '" y="' + (totalH - 3) + '" text-anchor="middle" fill="var(--text-muted)" font-size="7.5" font-family="var(--mono)">' + lbl + '</text>';
+  }
+
+  // Invisible hover rects for tooltip
+  svgContent += '<rect id="speedChartHitArea" x="' + pad.left + '" y="' + pad.top + '" width="' + w + '" height="' + h + '" fill="transparent" />';
+
+  svg.innerHTML = svgContent;
+
+  // Store data for tooltip lookup
+  svg._chartData = { filtered, times, tMin, tRange, pad, w, h, maxSpd, totalW, totalH };
+}
+
+// Speed chart tooltip interaction
+document.addEventListener('mousemove', handleSpeedChartHover);
+document.addEventListener('touchmove', handleSpeedChartHover, { passive: true });
+
+function handleSpeedChartHover(e) {
+  const svg = document.getElementById('speedChartSvg');
+  const tooltip = document.getElementById('speedChartTooltip');
+  if (!svg || !tooltip || !svg._chartData) return;
+
+  const rect = svg.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+  if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+    tooltip.style.display = 'none';
+    return;
+  }
+
+  const cd = svg._chartData;
+  const svgX = ((clientX - rect.left) / rect.width) * cd.totalW;
+
+  // Find closest data point
+  const t = cd.tMin + ((svgX - cd.pad.left) / cd.w) * cd.tRange;
+  let closest = 0, minDiff = Infinity;
+  for (let i = 0; i < cd.times.length; i++) {
+    const diff = Math.abs(cd.times[i] - t);
+    if (diff < minDiff) { minDiff = diff; closest = i; }
+  }
+
+  const p = cd.filtered[closest];
+  const d = new Date(p.timestamp);
+  const timeStr = d.toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', timeZone:'Europe/Berlin' });
+  const speed = (p.calculated_speed != null ? p.calculated_speed : p.speed);
+
+  tooltip.innerHTML = speed.toFixed(1) + ' kn<br><span style="color:var(--text-dim);">' + timeStr + '</span>';
+  tooltip.style.display = '';
+
+  const tooltipX = clientX - rect.left;
+  const tooltipY = clientY - rect.top - 40;
+  tooltip.style.left = Math.max(0, Math.min(tooltipX - 30, rect.width - 100)) + 'px';
+  tooltip.style.top = Math.max(0, tooltipY) + 'px';
+}
+
+document.getElementById('speedChartSvg').addEventListener('mouseleave', () => {
+  document.getElementById('speedChartTooltip').style.display = 'none';
+});
+
+// Speed chart range toggles
+document.querySelectorAll('.speed-chart-toggles button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.speed-chart-toggles button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    speedChartRange = btn.dataset.range;
+    renderSpeedChart();
+  });
+});
+
 // --- Config & State ---
 let config = null;
 let latestData = null;
@@ -2322,6 +2645,7 @@ function initMap() {
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     maxZoom: 19
   }).addTo(map);
+  setupStoryDotZoomHandler();
 }
 
 function fitRoute() {
@@ -2397,16 +2721,119 @@ function updateBoatMarker(lat, lon, course) {
   }
 }
 
+// Day-by-day track colors
+const DAY_COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6'];
+let dayTrackLines = [];
+let dayTrackData = []; // [{date, color, positions, distanceNm, bounds}]
+
 function updateTrack(history) {
-  const latlngs = history.map(p => [p.lat, p.lon]);
-  if (trackLine) {
-    trackLine.setLatLngs(latlngs);
+  // Remove old lines
+  dayTrackLines.forEach(l => map.removeLayer(l));
+  dayTrackLines = [];
+  dayTrackData = [];
+
+  if (history.length < 2) return;
+
+  // Group positions by date (local CET/CEST)
+  const dayGroups = {};
+  history.forEach(p => {
+    const d = new Date(p.timestamp);
+    const cetOffset = 1; // CET
+    const local = new Date(d.getTime() + cetOffset * 3600000);
+    const key = local.toISOString().slice(0, 10);
+    if (!dayGroups[key]) dayGroups[key] = [];
+    dayGroups[key].push(p);
+  });
+
+  const sortedDays = Object.keys(dayGroups).sort();
+
+  sortedDays.forEach((dateKey, dayIdx) => {
+    const positions = dayGroups[dateKey];
+    if (positions.length < 2) {
+      // Still record the day even with 1 point
+      const color = DAY_COLORS[dayIdx % DAY_COLORS.length];
+      dayTrackData.push({ date: dateKey, color, positions, distanceNm: 0, bounds: null });
+      return;
+    }
+    const latlngs = positions.map(p => [p.lat, p.lon]);
+    const color = DAY_COLORS[dayIdx % DAY_COLORS.length];
+
+    // Calculate distance for this day
+    let dist = 0;
+    for (let i = 1; i < positions.length; i++) {
+      dist += haversineNm(positions[i-1].lat, positions[i-1].lon, positions[i].lat, positions[i].lon);
+    }
+
+    const line = L.polyline(latlngs, { color, weight: 3, opacity: 0.85 }).addTo(map);
+    dayTrackLines.push(line);
+    dayTrackData.push({ date: dateKey, color, positions, distanceNm: Math.round(dist), bounds: line.getBounds() });
+
+    // Connect to previous day's last point for continuity
+    if (dayIdx > 0) {
+      const prevPositions = dayGroups[sortedDays[dayIdx - 1]];
+      if (prevPositions && prevPositions.length > 0) {
+        const prevLast = prevPositions[prevPositions.length - 1];
+        const connector = L.polyline(
+          [[prevLast.lat, prevLast.lon], latlngs[0]],
+          { color, weight: 3, opacity: 0.85 }
+        ).addTo(map);
+        dayTrackLines.push(connector);
+      }
+    }
+  });
+
+  // Also keep a reference for fitBounds
+  if (!trackLine) {
+    trackLine = L.polyline(history.map(p => [p.lat, p.lon]), { opacity: 0 }).addTo(map);
   } else {
-    trackLine = L.polyline(latlngs, {
-      color: '#ef4444',
-      weight: 3,
-      opacity: 0.8
-    }).addTo(map);
+    trackLine.setLatLngs(history.map(p => [p.lat, p.lon]));
+    trackLine.setStyle({ opacity: 0 });
+  }
+
+  renderDayLegend();
+}
+
+function renderDayLegend() {
+  let el = document.getElementById('dayLegend');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'dayLegend';
+    el.className = 'day-legend collapsed';
+    document.getElementById('map').appendChild(el);
+  }
+  if (dayTrackData.length === 0) { el.style.display = 'none'; return; }
+  el.style.display = '';
+
+  const items = dayTrackData.map((d, i) => {
+    const dt = new Date(d.date + 'T12:00:00');
+    const label = dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    return `<div class="day-legend-item" onclick="zoomToDay(${i})" title="Day ${i+1}">
+      <div class="day-legend-swatch" style="background:${d.color}"></div>
+      <span class="day-legend-label">Day ${i+1} &middot; ${label}</span>
+      <span class="day-legend-dist">${d.distanceNm}nm</span>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="day-legend-header" onclick="toggleDayLegend()">
+    <span>\uD83D\uDCC5 Days (${dayTrackData.length})</span>
+    <span style="font-size:0.6rem;" id="dayLegendArrow">\u25B6</span>
+  </div>
+  <div class="day-legend-body">${items}</div>`;
+}
+
+function toggleDayLegend() {
+  const el = document.getElementById('dayLegend');
+  el.classList.toggle('collapsed');
+  const arrow = document.getElementById('dayLegendArrow');
+  if (arrow) arrow.textContent = el.classList.contains('collapsed') ? '\u25B6' : '\u25BC';
+}
+
+function zoomToDay(idx) {
+  const d = dayTrackData[idx];
+  if (d && d.bounds) {
+    map.fitBounds(d.bounds, { padding: [40, 40], maxZoom: 10 });
+  } else if (d && d.positions.length > 0) {
+    map.setView([d.positions[0].lat, d.positions[0].lon], 8);
   }
 }
 
@@ -2670,27 +3097,8 @@ function updateUI() {
   // Avg speed
   document.getElementById('statAvgSpeed').textContent = avgSpeed.toFixed(1) + ' kn';
 
-  // Speed Sparkline (last 24h)
-  const sparkSvg = document.getElementById('sparklineSvg');
-  const now24 = Date.now() - 24 * 3600000;
-  const recent24 = historyData.filter(p => new Date(p.timestamp).getTime() > now24 && p.speed != null);
-  if (recent24.length >= 2) {
-    const maxSpd = Math.max(...recent24.map(p => p.speed), 1);
-    const w = 300, h = 40;
-    const points = recent24.map((p, i) => {
-      const x = (i / (recent24.length - 1)) * w;
-      const y = h - (p.speed / maxSpd) * (h - 4) - 2;
-      return x.toFixed(1) + ',' + y.toFixed(1);
-    });
-    const fillPoints = '0,' + h + ' ' + points.join(' ') + ' ' + w + ',' + h;
-    sparkSvg.innerHTML = '<polyline points="' + fillPoints + '" fill="rgba(6,182,212,0.15)" stroke="none"/>' +
-      '<polyline points="' + points.join(' ') + '" fill="none" stroke="var(--cyan)" stroke-width="1.5" stroke-linejoin="round"/>' +
-      '<text x="' + w + '" y="10" text-anchor="end" fill="var(--text-dim)" font-size="9" font-family="var(--mono)">' + maxSpd.toFixed(1) + ' kn</text>' +
-      '<text x="' + w + '" y="' + (h - 2) + '" text-anchor="end" fill="var(--text-dim)" font-size="9" font-family="var(--mono)">0</text>';
-    document.getElementById('sparklineContainer').style.display = '';
-  } else {
-    document.getElementById('sparklineContainer').style.display = 'none';
-  }
+  // Speed Chart
+  renderSpeedChart();
 
   // Voyage Timing
   const phaseInfo = getCurrentPhase(d.lat, d.lon, d.current_phase);
@@ -3495,7 +3903,7 @@ function renderUpdateCard(u) {
   commentsHtml += '</div></div>';
 
   const pinnedClass = u.pinned ? ' pinned' : '';
-  return `<div class="update-card${pinnedClass}" id="update-${u.id}">
+  return `<div class="update-card${pinnedClass}" id="update-${u.id}" data-id="${u.id}">
     <div class="update-card-header">
       <div class="update-avatar" style="background:${color};">${initial}</div>
       <div class="update-header-text">
@@ -3540,8 +3948,16 @@ function renderStoriesBar() {
 }
 
 function scrollToUpdate(id) {
-  const el = document.getElementById('update-' + id);
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (map) map.closePopup();
+  const card = document.getElementById('update-' + id);
+  if (!card) return;
+  if (isMobile()) {
+    const feedTab = document.querySelector('[data-tab="updates"]');
+    if (feedTab) feedTab.click();
+  }
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  card.style.outline = '2px solid var(--cyan)';
+  setTimeout(() => card.style.outline = '', 2000);
 }
 
 function checkNewUpdatesBadge() {
@@ -3615,37 +4031,116 @@ document.getElementById('updateFeed').addEventListener('scroll', function() {
   markUpdatesViewed();
 }, { passive: true, once: true });
 
+let storyTrailLine = null;
+
 function renderCrewUpdateMarkers() {
   crewUpdateMarkers.forEach(m => map.removeLayer(m));
   crewUpdateMarkers = [];
+  if (storyTrailLine) { map.removeLayer(storyTrailLine); storyTrailLine = null; }
 
-  for (const u of updatesData) {
-    if (u.estimated_lat == null || u.estimated_lon == null) continue;
-    const icon = L.divIcon({
-      html: '<div style="font-size:18px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));">\u{1F4F8}</div>',
-      className: '',
-      iconSize: [20, 20],
-      iconAnchor: [10, 10]
-    });
-    const escapedName = u.crew_name.replace(/</g, '&lt;');
-    const escapedMsg = u.message ? u.message.replace(/</g, '&lt;').replace(/\n/g, '<br>') : '';
-    let popupContent = `<b>${escapedName}</b> <small>${relativeTime(u.timestamp)}</small>`;
-    if (escapedMsg) popupContent += `<br>${escapedMsg}`;
+  const locatedUpdates = updatesData.filter(u => u.estimated_lat != null && u.estimated_lon != null);
+  if (locatedUpdates.length === 0) return;
+
+  // Sort by timestamp for story trail
+  const sorted = [...locatedUpdates].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+  // Draw story trail (dotted line connecting all story dots)
+  if (sorted.length >= 2) {
+    const trailCoords = sorted.map(u => [u.estimated_lat, u.estimated_lon]);
+    storyTrailLine = L.polyline(trailCoords, {
+      color: 'rgba(6,182,212,0.35)',
+      weight: 2,
+      dashArray: '4 6',
+      opacity: 0.6
+    }).addTo(map);
+  }
+
+  const zoom = map.getZoom();
+
+  for (const u of sorted) {
     const mediaItems = getMediaItems(u);
-    if (mediaItems.length > 0) {
-      popupContent += '<br>' + mediaItems.map(m => {
-        if (m.type === 'video') {
-          return `<video src="${m.url}" style="max-width:200px; border-radius:6px; margin-top:4px;" controls playsinline webkit-playsinline preload="none" loading="lazy"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''}></video>`;
-        }
-        return `<img src="${m.url}" style="max-width:200px; border-radius:6px; margin-top:4px;" onclick="openLightbox('${m.url}','photo')">`;
-      }).join('');
+    const firstPhoto = mediaItems.find(m => m.type === 'photo');
+    const firstThumb = mediaItems.find(m => m.thumbnail_url);
+    const thumbUrl = firstPhoto ? firstPhoto.url : (firstThumb ? firstThumb.thumbnail_url : null);
+
+    // Decide icon size based on zoom
+    const isZoomedIn = zoom >= 7;
+    const size = isZoomedIn ? 36 : 12;
+    let iconHtml;
+
+    if (isZoomedIn && thumbUrl) {
+      iconHtml = `<div class="story-dot" style="width:${size}px;height:${size}px;">
+        <img src="${thumbUrl}" loading="lazy" alt="">
+      </div>`;
+    } else if (isZoomedIn) {
+      iconHtml = `<div class="story-dot" style="width:${size}px;height:${size}px;font-size:16px;">
+        \uD83D\uDCF8
+      </div>`;
+    } else {
+      iconHtml = `<div class="story-dot-simple" style="width:${size}px;height:${size}px;"></div>`;
     }
 
+    const icon = L.divIcon({
+      html: iconHtml,
+      className: '',
+      iconSize: [size, size],
+      iconAnchor: [size/2, size/2]
+    });
+
+    // Build rich popup
+    const escapedName = u.crew_name.replace(/</g, '&lt;');
+    const escapedMsg = u.message ? u.message.replace(/</g, '&lt;').replace(/\n/g, '<br>') : '';
+    const timeStr = new Date(u.timestamp).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', timeZone:'Europe/Berlin' });
+
+    let popupHtml = `<div class="story-popup">`;
+    popupHtml += `<b>${escapedName}</b> <small style="color:#64748b;">${timeStr}</small>`;
+
+    if (escapedMsg) popupHtml += `<div class="story-msg">${escapedMsg}</div>`;
+
+    // Show first media item
+    if (mediaItems.length > 0) {
+      const m = mediaItems[0];
+      if (m.type === 'video') {
+        popupHtml += `<video src="${m.url}" controls playsinline preload="none" loading="lazy"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''}></video>`;
+      } else {
+        popupHtml += `<img src="${m.url}" loading="lazy" onclick="openLightbox('${m.url}','photo')">`;
+      }
+      if (mediaItems.length > 1) popupHtml += `<div style="font-size:0.65rem; color:#64748b;">+${mediaItems.length - 1} more</div>`;
+    }
+
+    // Weather line
+    const weatherParts = [];
+    if (u.wind_speed != null) weatherParts.push('\uD83C\uDF2C\uFE0F ' + u.wind_speed + ' kn');
+    if (u.wave_height != null) weatherParts.push('\uD83C\uDF0A ' + u.wave_height + 'm');
+    if (u.sea_temp != null) weatherParts.push('\uD83C\uDF21\uFE0F ' + u.sea_temp + '\u00B0C');
+    if (weatherParts.length > 0) {
+      popupHtml += `<div class="story-meta">${weatherParts.join(' &middot; ')}</div>`;
+    }
+
+    // Link to comments in feed
+    popupHtml += `<span class="story-link" onclick="scrollToUpdate(${u.id})">View in feed \u2192</span>`;
+    popupHtml += `</div>`;
+
     const marker = L.marker([u.estimated_lat, u.estimated_lon], { icon, zIndexOffset: 500 })
-      .bindPopup(popupContent, { maxWidth: 250 })
+      .bindPopup(popupHtml, { maxWidth: 280, className: '' })
       .addTo(map);
     crewUpdateMarkers.push(marker);
   }
+}
+
+
+
+// Re-render markers on zoom change to toggle between dots and thumbnails
+function setupStoryDotZoomHandler() {
+  let lastZoomLevel = map.getZoom();
+  map.on('zoomend', () => {
+    const z = map.getZoom();
+    const crossedThreshold = (lastZoomLevel < 7 && z >= 7) || (lastZoomLevel >= 7 && z < 7);
+    lastZoomLevel = z;
+    if (crossedThreshold && crewUpdateMarkers.length > 0) {
+      renderCrewUpdateMarkers();
+    }
+  });
 }
 
 // --- Double-tap to like ---
