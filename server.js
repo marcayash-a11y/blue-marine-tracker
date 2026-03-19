@@ -661,59 +661,85 @@ async function savePosition(lat, lon, speed, course, heading, timestamp) {
   updateForecastCache(lat, lon).catch(err => console.error('Forecast bg error:', err.message));
 }
 
-// --- AIS Stream ---
-let aisConnected = false;
-let reconnectTimeout = null;
+// --- AIS Periodic Check ---
+// Opens a websocket for up to 5 minutes every hour instead of staying connected 24/7
+const AIS_CHECK_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+const AIS_CHECK_INTERVAL = 1 * 60 * 60 * 1000; // 1 hour
 
-function connectAIS() {
+function checkAIS() {
   if (!AISSTREAM_API_KEY) {
-    console.warn('No AISSTREAM_API_KEY set — AIS stream disabled. Use POST /api/position for manual entry.');
+    console.warn('No AISSTREAM_API_KEY set — AIS check disabled. Use POST /api/position for manual entry.');
     return;
   }
 
-  console.log('AIS: Connecting to aisstream.io...');
-  const ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
+  console.log('AIS check: Opening websocket...');
+  let received = false;
+  let closed = false;
+  let ws;
 
-  ws.on('open', () => {
-    aisConnected = true;
-    console.log('AIS: Connected');
-    ws.send(JSON.stringify({
-      APIKey: AISSTREAM_API_KEY,
-      BoundingBoxes: [[[-90, -180], [90, 180]]],
-      FiltersShipMMSI: [MMSI],
-      FilterMessageTypes: ['PositionReport']
-    }));
-  });
-
-  ws.on('message', async (data) => {
-    try {
-      const msg = JSON.parse(data);
-      if (msg.MessageType === 'PositionReport') {
-        const pos = msg.Message.PositionReport;
-        const meta = msg.MetaData;
-        const lat = pos.Latitude;
-        const lon = pos.Longitude;
-        const speed = pos.Sog;
-        const course = pos.Cog;
-        const heading = pos.TrueHeading;
-        const timestamp = meta.time_utc || new Date().toISOString();
-        await savePosition(lat, lon, speed, course, heading, timestamp);
-      }
-    } catch (err) {
-      console.error('AIS message parse error:', err.message);
+  const timeout = setTimeout(() => {
+    if (!received && !closed) {
+      console.log('AIS check: no data received');
+      closeWs();
     }
-  });
+  }, AIS_CHECK_TIMEOUT);
 
-  ws.on('close', () => {
-    aisConnected = false;
-    console.log('AIS: Disconnected. Reconnecting in 10s...');
-    reconnectTimeout = setTimeout(connectAIS, 10000);
-  });
+  function closeWs() {
+    if (closed) return;
+    closed = true;
+    clearTimeout(timeout);
+    try { ws.close(); } catch (e) { /* ignore */ }
+  }
 
-  ws.on('error', (err) => {
-    console.error('AIS: WebSocket error:', err.message);
-    ws.close();
-  });
+  try {
+    ws = new WebSocket('wss://stream.aisstream.io/v0/stream');
+
+    ws.on('open', () => {
+      console.log('AIS check: Connected, listening for up to 5 minutes...');
+      ws.send(JSON.stringify({
+        APIKey: AISSTREAM_API_KEY,
+        BoundingBoxes: [[[-90, -180], [90, 180]]],
+        FiltersShipMMSI: [MMSI],
+        FilterMessageTypes: ['PositionReport']
+      }));
+    });
+
+    ws.on('message', async (data) => {
+      try {
+        const msg = JSON.parse(data);
+        if (msg.MessageType === 'PositionReport') {
+          received = true;
+          const pos = msg.Message.PositionReport;
+          const meta = msg.MetaData;
+          const lat = pos.Latitude;
+          const lon = pos.Longitude;
+          const speed = pos.Sog;
+          const course = pos.Cog;
+          const heading = pos.TrueHeading;
+          const timestamp = meta.time_utc || new Date().toISOString();
+          await savePosition(lat, lon, speed, course, heading, timestamp);
+          console.log('AIS check: Position received and saved, closing websocket.');
+          closeWs();
+        }
+      } catch (err) {
+        console.error('AIS check: message parse error:', err.message);
+      }
+    });
+
+    ws.on('close', () => {
+      closed = true;
+      clearTimeout(timeout);
+      console.log('AIS check: Websocket closed.');
+    });
+
+    ws.on('error', (err) => {
+      console.error('AIS check: WebSocket error:', err.message);
+      closeWs();
+    });
+  } catch (err) {
+    console.error('AIS check: Failed to connect:', err.message);
+    clearTimeout(timeout);
+  }
 }
 
 // --- API Routes ---
@@ -1248,5 +1274,6 @@ app.listen(PORT, () => {
       console.log(`Phase initialized: ${phase.phase.name}`);
     }
   } catch (err) { console.error('Phase init error:', err.message); }
-  connectAIS();
+  checkAIS();
+  setInterval(checkAIS, AIS_CHECK_INTERVAL);
 });

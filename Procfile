@@ -1,1 +1,1 @@
-web: node server.js
+web: node --max-old-space-size=128 server.js
