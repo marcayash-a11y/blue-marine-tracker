@@ -3814,9 +3814,11 @@ function renderDigestCard(d) {
 
 function renderCarouselSlide(m) {
   if (m.type === 'video') {
-    return `<div class="carousel-slide"><video src="${m.url}" controls playsinline webkit-playsinline preload="none" loading="lazy"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video><div class="play-overlay" style="pointer-events:none;">\u25B6\uFE0F</div></div>`;
+    const feedSrc = m.compressed_url || m.url;
+    return `<div class="carousel-slide"><video src="${feedSrc}" data-hd-src="${m.url}" controls playsinline webkit-playsinline preload="none"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video><div class="play-overlay" style="pointer-events:none;">\u25B6\uFE0F</div></div>`;
   }
-  return `<div class="carousel-slide"><img src="${m.url}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')"></div>`;
+  const feedSrc = m.thumbnail_url || m.url;
+  return `<div class="carousel-slide"><img src="${feedSrc}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')"></div>`;
 }
 
 function renderMediaArea(media, updateId) {
@@ -3825,9 +3827,11 @@ function renderMediaArea(media, updateId) {
   if (media.length === 1) {
     const m = media[0];
     if (m.type === 'video') {
-      return `<div class="update-media-area"${dblTap}><video src="${m.url}" controls playsinline webkit-playsinline preload="none" loading="lazy"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video></div>`;
+      const feedSrc = m.compressed_url || m.url;
+      return `<div class="update-media-area"${dblTap}><video src="${feedSrc}" data-hd-src="${m.url}" controls playsinline webkit-playsinline preload="none"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''} onclick="event.stopPropagation()"></video></div>`;
     }
-    return `<div class="update-media-area"${dblTap}><img src="${m.url}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')"></div>`;
+    const feedSrc = m.thumbnail_url || m.url;
+    return `<div class="update-media-area"${dblTap}><img src="${feedSrc}" alt="Photo" loading="lazy" onclick="openLightbox('${m.url}','photo')"></div>`;
   }
   // Multi: carousel with scroll-snap
   const slides = media.map(m => renderCarouselSlide(m)).join('');
@@ -4101,9 +4105,11 @@ function renderCrewUpdateMarkers() {
     if (mediaItems.length > 0) {
       const m = mediaItems[0];
       if (m.type === 'video') {
-        popupHtml += `<video src="${m.url}" controls playsinline preload="none" loading="lazy"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''}></video>`;
+        const feedSrc = m.compressed_url || m.url;
+        popupHtml += `<video src="${feedSrc}" controls playsinline preload="none"${m.thumbnail_url ? ' poster="' + m.thumbnail_url + '"' : ''}></video>`;
       } else {
-        popupHtml += `<img src="${m.url}" loading="lazy" onclick="openLightbox('${m.url}','photo')">`;
+        const feedSrc = m.thumbnail_url || m.url;
+        popupHtml += `<img src="${feedSrc}" loading="lazy" onclick="openLightbox('${m.url}','photo')">`;
       }
       if (mediaItems.length > 1) popupHtml += `<div style="font-size:0.65rem; color:#64748b;">+${mediaItems.length - 1} more</div>`;
     }
@@ -4167,14 +4173,20 @@ function openLightbox(url, type) {
   if (type === 'video') {
     imgEl.style.display = 'none';
     vidEl.style.display = 'block';
-    vidEl.src = url;
+    vidEl.src = url; // Always full quality URL in lightbox
   } else {
     vidEl.style.display = 'none';
     vidEl.src = '';
     imgEl.style.display = 'block';
-    imgEl.src = url;
+    imgEl.src = url; // Always full quality URL in lightbox
   }
   document.getElementById('photoLightbox').classList.remove('hidden');
+}
+
+// Open video in HD lightbox from feed
+function openVideoHD(videoEl) {
+  const hdSrc = videoEl.getAttribute('data-hd-src');
+  if (hdSrc) openLightbox(hdSrc, 'video');
 }
 
 function closeLightbox(event) {

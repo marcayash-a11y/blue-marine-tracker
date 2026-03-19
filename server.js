@@ -22,9 +22,13 @@ app.set('trust proxy', 1);
 app.use(compression());
 app.use(express.json({ limit: '15mb' }));
 app.use(express.static(path.join(__dirname, 'public'), {
+  etag: true,
+  lastModified: true,
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.html')) {
-      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Cache-Control', 'public, max-age=60');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=86400');
     }
   }
 }));
@@ -43,7 +47,7 @@ if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 const uploadsDir = path.join(dataDir, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
-// Serve uploads with Accept-Ranges for video streaming
+// Serve uploads with Accept-Ranges for video streaming + aggressive caching
 app.use('/uploads', (req, res, next) => {
   const ext = path.extname(req.path).toLowerCase();
   const mimeTypes = { '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm' };
@@ -54,7 +58,16 @@ app.use('/uploads', (req, res, next) => {
     if (!fs.existsSync(filePath)) return res.status(404).end();
     const stat = fs.statSync(filePath);
     const fileSize = stat.size;
+    const etag = `"${stat.size.toString(16)}-${stat.mtimeMs.toString(16)}"`;
+    const lastModified = stat.mtime.toUTCString();
+    // Check conditional request headers
+    if (req.headers['if-none-match'] === etag) return res.status(304).end();
     const range = req.headers.range;
+    const cacheHeaders = {
+      'Cache-Control': 'public, max-age=604800, immutable',
+      'ETag': etag,
+      'Last-Modified': lastModified,
+    };
     if (range) {
       const parts = range.replace(/bytes=/, '').split('-');
       const start = parseInt(parts[0], 10);
@@ -65,7 +78,7 @@ app.use('/uploads', (req, res, next) => {
         'Accept-Ranges': 'bytes',
         'Content-Length': chunkSize,
         'Content-Type': mimeTypes[ext],
-        'Cache-Control': 'public, max-age=86400',
+        ...cacheHeaders,
       });
       fs.createReadStream(filePath, { start, end }).pipe(res);
     } else {
@@ -73,7 +86,7 @@ app.use('/uploads', (req, res, next) => {
         'Content-Length': fileSize,
         'Content-Type': mimeTypes[ext],
         'Accept-Ranges': 'bytes',
-        'Cache-Control': 'public, max-age=86400',
+        ...cacheHeaders,
       });
       fs.createReadStream(filePath).pipe(res);
     }
@@ -82,8 +95,10 @@ app.use('/uploads', (req, res, next) => {
   }
 });
 app.use('/uploads', express.static(uploadsDir, {
+  etag: true,
+  lastModified: true,
   setHeaders: (res, filePath) => {
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
   }
 }));
 
@@ -390,6 +405,22 @@ function generateVideoThumbnail(videoPath, thumbnailPath) {
       })
       .on('end', () => resolve())
       .on('error', (err) => reject(err));
+  });
+}
+
+// Generate compressed 480p video for feed display
+function compressVideo(inputPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .videoCodec('libx264')
+      .size('?x480')
+      .videoBitrate('500k')
+      .audioBitrate('64k')
+      .outputOptions(['-preset', 'fast', '-crf', '28', '-movflags', '+faststart'])
+      .output(outputPath)
+      .on('end', () => resolve())
+      .on('error', (err) => reject(err))
+      .run();
   });
 }
 const getUpdates = db.prepare('SELECT * FROM updates ORDER BY id DESC LIMIT 50');
@@ -911,7 +942,7 @@ app.post('/api/updates', adminLimiter, upload.array('files', 5), async (req, res
       const outPath = path.join(uploadsDir, filename);
 
       if (isVideo) {
-        // Move video file directly (no compression)
+        // Move video file directly (full quality)
         try { fs.renameSync(file.path, outPath); } catch (e) {
           fs.copyFileSync(file.path, outPath);
           fs.unlinkSync(file.path);
@@ -925,23 +956,46 @@ app.post('/api/updates', adminLimiter, upload.array('files', 5), async (req, res
           console.error('Thumbnail generation error:', err.message);
         }
         const thumbExists = fs.existsSync(thumbPath);
+        // Generate compressed 480p version for feed
+        const compFilename = basename + '_compressed.mp4';
+        const compPath = path.join(uploadsDir, compFilename);
+        let compressedUrl = null;
+        try {
+          await compressVideo(outPath, compPath);
+          if (fs.existsSync(compPath)) compressedUrl = '/uploads/' + compFilename;
+        } catch (err) {
+          console.error('Video compression error:', err.message);
+        }
         mediaItems.push({
           url: '/uploads/' + filename,
           type: 'video',
-          thumbnail_url: thumbExists ? '/uploads/' + thumbFilename : null
+          thumbnail_url: thumbExists ? '/uploads/' + thumbFilename : null,
+          compressed_url: compressedUrl
         });
       } else {
-        // Process image with sharp
+        // Process image with sharp — full size (800px)
         const buf = fs.readFileSync(file.path);
         await sharp(buf)
           .resize(800, 800, { fit: 'inside', withoutEnlargement: true })
           .jpeg({ quality: 80 })
           .toFile(outPath);
+        // Generate 200px thumbnail for feed
+        const thumbFilename = basename + '_thumb.jpg';
+        const thumbPath = path.join(uploadsDir, thumbFilename);
+        try {
+          await sharp(buf)
+            .resize(200, 200, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 70 })
+            .toFile(thumbPath);
+        } catch (err) {
+          console.error('Photo thumbnail error:', err.message);
+        }
+        const thumbExists = fs.existsSync(thumbPath);
         try { fs.unlinkSync(file.path); } catch (e) {}
         mediaItems.push({
           url: '/uploads/' + filename,
           type: 'photo',
-          thumbnail_url: null
+          thumbnail_url: thumbExists ? '/uploads/' + thumbFilename : null
         });
       }
     } catch (err) {
